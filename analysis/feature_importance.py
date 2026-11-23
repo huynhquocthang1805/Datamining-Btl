@@ -129,6 +129,44 @@ def saliency(model, b, cfg, ds, n_samples=48, n_targets=40, step=None):
     return pd.DataFrame(sal[:, ::-1], index=names, columns=[f'lag {l}' for l in range(1, L + 1)])
 
 
+def plot(res, sal, models, interval, ds):
+    fig, axes = plt.subplots(1, 2, figsize=(11, 3.9))
+    for i, name in enumerate(models):
+        s = res[(res.model == name) & (res.group == 'lag')]
+        axes[0].plot(s.lag * interval, s['ΔRMSE'], marker='o', ms=4, color=ps.color(name, i),
+                     label=ps.label(name))
+    axes[0].set(xlabel='Giá trị quan sát cách thời điểm dự báo (phút)', ylabel='RMSE tăng khi xáo trộn',
+                title='Tầm quan trọng của từng độ trễ')
+    axes[0].legend(fontsize=7.5)
+    kinds = ['lịch sử của chính nút', 'láng giềng 1-hop', 'nút ngẫu nhiên xa (≥4 hop)', 'đặc trưng thời gian (giờ, thứ)']
+    x = np.arange(len(kinds)); w = .8 / len(models)
+    for i, name in enumerate(models):
+        s = res[res.model == name].set_index('feature').reindex(kinds)
+        axes[1].bar(x + (i - (len(models) - 1) / 2) * w, s['ΔRMSE'].fillna(0), w * .92,
+                    color=ps.color(name, i), label=ps.label(name))
+    axes[1].set(xticks=x, xticklabels=['Lịch sử\nchính nút', 'Láng giềng\n1-hop', 'Nút xa\n(đối chứng)', 'Giờ/thứ'],
+                ylabel='RMSE tại nút tăng khi xáo trộn', title='Nguồn thông tin: thời gian vs không gian')
+    axes[1].axhline(0, color=ps.INK2, lw=.8)
+    fig.suptitle(f'{ds}: ảnh hưởng của thuộc tính đầu vào (permutation importance trên test)', fontsize=11.5, y=1.02)
+    fig.tight_layout(); fig.savefig(FIG / f'fi_importance_{ds}.png'); plt.close(fig)
+    if sal:
+        fig, axes = plt.subplots(1, len(sal), figsize=(3.7 * len(sal) + 1.2, 3.8), squeeze=False, sharey=True)
+        vmax = max(float(v.values.max()) for v in sal.values())
+        short = {'gru': 'GRU', 'tgcn': 'T-GCN (gốc)', 'tgcn_selfsep_res_time': 'T-GCN-RTS (tách self)'}
+        for ax, (name, sm) in zip(axes[0], sal.items()):
+            im = ax.imshow(sm.values, aspect='auto', cmap=ps.BLUES, vmin=0, vmax=vmax)
+            ax.grid(False)
+            ax.set(xticks=range(0, sm.shape[1], 2), xticklabels=[f'{(j + 1) * interval}' for j in range(0, sm.shape[1], 2)],
+                   yticks=range(len(sm.index)), yticklabels=sm.index, xlabel='Độ trễ (phút trước)',
+                   title=short.get(name, name))
+        axes[0][0].set_ylabel('Khoảng cách tới nút dự báo (hop)')
+        cb = fig.colorbar(im, ax=axes[0].tolist(), pad=.015, fraction=.03); cb.outline.set_visible(False)
+        cb.set_label('|∂ŷ/∂x| trung bình')
+        fig.suptitle(f'{ds}: trường tiếp nhận không gian–thời gian (gradient saliency, dự báo 15 phút)',
+                     fontsize=11.5, y=1.03)
+        fig.savefig(FIG / f'fi_saliency_{ds}.png'); plt.close(fig)
+
+
 def pick(ds, name):
     for r in run_dirs(ds):
         if r['name'] == name and r['seed'] == 42 and r['group'] in ('main', 'improve', 'variants'):
@@ -139,7 +177,15 @@ def pick(ds, name):
 def main():
     p = argparse.ArgumentParser(); p.add_argument('--dataset', default='losloop')
     p.add_argument('--nodes', type=int, default=60)
+    p.add_argument('--plot-only', action='store_true', help='redraw figures from saved CSVs')
     a = p.parse_args(); ds = a.dataset
+    if a.plot_only:
+        res = pd.read_csv(TAB / f'feature_importance_{ds}.csv')
+        models = list(dict.fromkeys(res.model))
+        sal = {m: pd.read_csv(TAB / f'fi_saliency_{m}_{ds}.csv', index_col=0)
+               for m in ('gru', 'tgcn', 'tgcn_selfsep_res_time') if (TAB / f'fi_saliency_{m}_{ds}.csv').is_file()}
+        plot(res, sal, models, 5 if ds == 'losloop' else 15, ds)
+        return
     models = [m for m in ('gru', 'tgcn', 'gru_res_time', 'tgcn_res_time', 'tgcn_selfsep_res_time') if pick(ds, m)]
     allrows = []; sal = {}
     for name in models:
@@ -153,43 +199,7 @@ def main():
             sal[name] = saliency(model, b, cfg, ds)
             sal[name].to_csv(TAB / f'fi_saliency_{name}_{ds}.csv')
     res = pd.concat(allrows); res.to_csv(TAB / f'feature_importance_{ds}.csv', index=False)
-
-    # figure 1: lag importance
-    fig, axes = plt.subplots(1, 2, figsize=(11, 3.8))
-    for i, name in enumerate(models):
-        s = res[(res.model == name) & (res.group == 'lag')]
-        axes[0].plot(s.lag * b.interval_min, s['ΔRMSE'], marker='o', ms=4, color=ps.color(name, i),
-                     label=ps.label(name))
-    axes[0].set(xlabel='Giá trị quan sát cách thời điểm dự báo (phút)', ylabel='RMSE tăng khi xáo trộn',
-                title='Tầm quan trọng của từng độ trễ', yscale='symlog')
-    axes[0].legend(fontsize=8)
-    kinds = ['lịch sử của chính nút', 'láng giềng 1-hop', 'nút ngẫu nhiên xa (≥4 hop)', 'đặc trưng thời gian (giờ, thứ)']
-    x = np.arange(len(kinds)); w = .8 / len(models)
-    for i, name in enumerate(models):
-        s = res[res.model == name].set_index('feature').reindex(kinds)
-        axes[1].bar(x + (i - (len(models) - 1) / 2) * w, s['ΔRMSE'].fillna(0), w * .92,
-                    color=ps.color(name, i), label=ps.label(name))
-    axes[1].set(xticks=x, xticklabels=['Lịch sử\nchính nút', 'Láng giềng\n1-hop', 'Nút xa\n(đối chứng)', 'Giờ/thứ'],
-                ylabel='RMSE tại nút tăng khi xáo trộn', title='Nguồn thông tin: thời gian vs không gian')
-    axes[1].axhline(0, color=ps.INK2, lw=.8)
-    fig.suptitle(f'{ds}: ảnh hưởng của thuộc tính đầu vào (permutation importance trên test)', fontsize=11.5)
-    fig.tight_layout(); fig.savefig(FIG / f'fi_importance_{ds}.png'); plt.close(fig)
-
-    # figure 2: saliency heatmaps
-    if sal:
-        fig, axes = plt.subplots(1, len(sal), figsize=(4.2 * len(sal) + 1, 3.6), squeeze=False)
-        vmax = max(float(s.values.max()) for s in sal.values())
-        for ax, (name, s) in zip(axes[0], sal.items()):
-            im = ax.imshow(s.values, aspect='auto', cmap=ps.BLUES, vmin=0, vmax=vmax)
-            ax.grid(False)
-            ax.set(xticks=range(0, s.shape[1], 2), xticklabels=[f'{(j + 1) * b.interval_min}' for j in range(0, s.shape[1], 2)],
-                   yticks=range(len(s.index)), yticklabels=s.index, xlabel='Độ trễ (phút trước)',
-                   title=ps.label(name))
-        axes[0][0].set_ylabel('Khoảng cách tới nút cần dự báo (hop)')
-        cb = fig.colorbar(im, ax=axes[0].tolist(), pad=.01); cb.outline.set_visible(False)
-        cb.set_label('|∂ŷ/∂x| trung bình')
-        fig.suptitle(f'{ds}: trường tiếp nhận không gian–thời gian (gradient saliency, dự báo 15 phút)', fontsize=11.5)
-        fig.savefig(FIG / f'fi_saliency_{ds}.png'); plt.close(fig)
+    plot(res, sal, models, b.interval_min, ds)
     md = res[res.group != 'lag'][['model', 'feature', 'ΔRMSE']].round(4)
     (TAB / f'feature_importance_{ds}.md').write_text(df_to_markdown(md, index=False), encoding='utf-8')
 
