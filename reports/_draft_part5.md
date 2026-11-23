@@ -34,7 +34,7 @@ CONFORMAL_TABLE
 ### 8.5 Các kiểm tra khác
 
 - **Điểm nội suy:** loại 4.6% mục tiêu test nằm trên đoạn nội suy thẳng làm RMSE của mọi mô hình tăng ~0.06–0.10 (các điểm nội suy "dễ" hơn), thứ hạng không đổi.
-- **Độ lệch theo mức tốc độ** (Hình 13): khi thực tế ≤ 20 mph, GRU/T-GCN dự báo cao hơn trung bình ~9 mph; khi thông thoáng (> 60 mph) thấp hơn ~1.4 mph. Mô hình "co về trung bình"; độ tin cậy thấp nhất đúng lúc cần nhất (kẹt xe).
+- **Độ lệch theo mức tốc độ** (Hình 18): khi thực tế ≤ 20 mph, GRU/T-GCN dự báo cao hơn trung bình ~9 mph; khi thông thoáng (> 60 mph) thấp hơn ~1.4 mph. Mô hình "co về trung bình"; độ tin cậy thấp nhất đúng lúc cần nhất (kẹt xe).
 - **Độ lạc quan của việc chọn epoch theo test:** trung bình 0.53%, tối đa 1.7% RMSE (mục 4.1).
 
-![Hình 13. Sai số trung bình theo khoảng tốc độ thực tế (dự báo 15 phút)](figures/rel_bias_by_level_losloop.png)
+![Hình 18. Sai số trung bình theo khoảng tốc độ thực tế (dự báo 15 phút)](figures/rel_bias_by_level_losloop.png)

@@ -4,7 +4,7 @@
 
 Chúng tôi đo **permutation importance trên tập test**: xáo trộn một nhóm đầu vào giữa các mẫu (giữ nguyên phân phối, cắt đứt liên hệ với mục tiêu) rồi xem RMSE tăng bao nhiêu. Với đầu vào không gian, phép đo làm riêng cho từng nút đích (40 nút ngẫu nhiên): xáo trộn chuỗi của chính nút / của các láng giềng 1-hop / của cùng số nút ở xa (≥ 4 hop, đối chứng).
 
-![Hình 11. Ảnh hưởng của từng độ trễ (trái) và của từng nguồn thông tin (phải)](figures/fi_importance_losloop.png)
+![Hình 12. Ảnh hưởng của từng độ trễ (trái) và của từng nguồn thông tin (phải)](figures/fi_importance_losloop.png)
 
 FI_TABLE
 
@@ -19,7 +19,7 @@ FI_TABLE
 
 Gradient saliency |∂ŷ_i/∂x_j(t−ℓ)| (dự báo 15 phút) gộp theo khoảng cách đồ thị giữa i và j và theo độ trễ ℓ cho thấy mô hình *thực sự* nhìn vào đâu:
 
-![Hình 12. Độ nhạy của dự báo theo khoảng cách trên đồ thị và độ trễ](figures/fi_saliency_losloop.png)
+![Hình 13. Độ nhạy của dự báo theo khoảng cách trên đồ thị và độ trễ](figures/fi_saliency_losloop.png)
 
 - **GRU** chỉ nhạy với chính nút (hàng 0 hop), giảm dần theo độ trễ.
 - **T-GCN gốc**: độ nhạy với chính nút ở độ trễ 5 phút giảm từ ≈ 0.41 (GRU) xuống ≈ 0.27, phần còn lại chuyển sang láng giềng 1–2 hop. Vì mỗi bước GRU áp Â lên cả đầu vào lẫn trạng thái ẩn, trường tiếp nhận về lý thuyết mở rộng thêm ít nhất 1 hop mỗi bước; thực tế mô hình chỉ dùng tới ~2 hop.
