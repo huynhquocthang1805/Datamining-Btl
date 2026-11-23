@@ -1,154 +1,121 @@
-# T-GCN / T-GCN+ — Dự báo tốc độ giao thông
+# GRU / T-GCN — Dự báo tốc độ giao thông: tái lập, phản biện và cải tiến
 
-Dự án Python/PyTorch triển khai lại kiến trúc T-GCN (GCN + GRU) và một biến thể nghiên cứu **T-GCN+**. Có mã tải dữ liệu Los-loop/SZ-taxi, chạy thử offline, train/evaluate/so sánh, ảnh và tệp kết quả, cùng mẫu báo cáo Word.
+Cài đặt PyTorch độc lập của GRU, GCN, T-GCN (Zhao et al., 2019) và các cải tiến, chạy trên dữ liệu thật **Los-loop** (207 cảm biến, 5 phút) và **SZ-taxi** (156 tuyến, 15 phút) theo ba giai đoạn của đề tài:
 
-> ĐỌC TRƯỚC: Đây là bản cài đặt **độc lập** theo ý tưởng T-GCN, không phải copy mã hoặc cam kết tái lập chỉ số của tác giả. Bản T-GCN+ mới là **giả thuyết cải tiến**, chưa được xác nhận bằng thực nghiệm thật. Bộ `data/demo` là dữ liệu GIẢ LẬP, chỉ dùng kiểm thử. Kết quả test trên demo không được trình bày như kết quả nghiên cứu.
+1. GRU — kết quả ban đầu, kiểm tra dữ liệu, biểu đồ chuỗi thời gian;
+2. T-GCN — cùng dữ liệu, cùng cách chia train/validation/test;
+3. So sánh sai số, phân tích giờ cao điểm, thử cải tiến (cửa sổ đầu vào, hidden units, đặc trưng thời gian, residual, cách dùng đồ thị).
+
+📄 **Báo cáo đầy đủ:** [`reports/BAO_CAO_TGCN.md`](reports/BAO_CAO_TGCN.md) (bản Word: `reports/BAO_CAO_TGCN.docx`) — ý tưởng → dẫn dắt → phản biện → minh chứng; ảnh hưởng của thuộc tính; mô hình huấn luyện được và cách nạp để dự báo; độ tin cậy; giải thích cơ chế; so sánh với bài báo.
+
+## Kết quả chính (Los-loop, test 20% cuối, 3 seed, RMSE / MAE trung bình 12 tầm 5…60 phút)
+
+| Mô hình | RMSE | MAE | Ghi chú |
+|---|---|---|---|
+| Persistence (giữ giá trị cuối) | 8.42 | 4.41 | baseline bài báo không có |
+| GRU | 7.50 ± 0.01 | 4.18 ± 0.02 | tái lập đúng bài báo ("15 phút": 5.217 so với 5.218) |
+| T-GCN (Â đúng như mã tác giả) | 7.52 ± 0.03 | 4.37 ± 0.04 | **không hơn GRU** (p = 0.76) |
+| T-GCN tách self/láng giềng `[x, Âx]W` | 7.30 ± 0.06 | 4.12 ± 0.02 | **hơn GRU có ý nghĩa** (p = 0.01) |
+| GRU-RT (residual + giờ/thứ) | 6.98 ± 0.06 | 4.07 ± 0.06 | chọn theo validation |
+| **Ensemble 3 seed GRU-RT (mô hình cuối)** | **6.91** | **4.01** | "15 phút" 5.09 / 3.01 < bài báo T-GCN 5.13 / 3.18 |
+
+Phát hiện chính: phép chuẩn hóa D^(-1/2)(A+I)D^(-1/2) của T-GCN chỉ giữ ~30% tín hiệu của chính nút ⇒ dự báo tầm ngắn kém cả persistence; bài báo chọn epoch theo tập test, gộp sai số các tầm, thiếu baseline persistence và có MAE của GRU tốt hơn T-GCN ở cả 8 ô của Bảng 1; trong giờ cao điểm persistence vẫn tốt nhất theo MAE. Chi tiết, kiểm định thống kê và hình trong báo cáo.
 
 ## 1. Cài đặt
 
-Yêu cầu Python 3.10 trở lên; khuyên dùng Python 3.10–3.12. Chạy bên trong thư mục chứa `train.py`.
-
-Windows PowerShell:
-
-```powershell
-py -m venv .venv
-.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-Linux/macOS/Colab (Colab thường có torch):
+Python 3.10+.
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Nếu dùng GPU NVIDIA, cần cài torch đúng bản CUDA theo https://pytorch.org/get-started/locally/ trước/hoặc thay cài mặc định.
+(Trên Windows: tạo venv bằng `py -m venv .venv` rồi `.venv\Scripts\Activate.ps1`. GPU: cài torch đúng bản CUDA theo pytorch.org. Toàn bộ thí nghiệm trong báo cáo chạy trên CPU 4 nhân.)
 
-## 2. Kiểm tra nhanh KHÔNG cần internet (synthetic)
-
-Dữ liệu mô phỏng đã có tại `data/demo`. Có thể tạo lại bằng `python generate_demo.py`. Kiểm thử:
-
-```bash
-python -m unittest discover -s tests -v
-python run_experiments.py --dataset demo --epochs 2 --batch-size 16 --max-train-batches 3 --max-val-batches 1 --device cpu
-```
-
-Kết quả nằm trong `results/demo/`. Tham số giới hạn batch **chỉ dành cho smoke test**, không dùng báo cáo học thuật.
-
-## 3. Thử nghiệm THẬT trên Los-loop
-
-Dữ liệu chưa được gói kèm ZIP do được tải từ repository công khai của tác giả. Cần internet khi chạy download:
+## 2. Dữ liệu
 
 ```bash
 python download_data.py --dataset losloop
-python run_experiments.py --dataset losloop --epochs 80 --seeds 42 123 2026 --horizon 3 --seq-len 12 --device auto
-python compare.py --dataset losloop
-python make_report.py --dataset losloop
-```
-
-Muốn chạy nhanh thử trước:
-
-```bash
-python train.py --dataset losloop --model tgcn --epochs 5 --patience 3
-python train.py --dataset losloop --model tgcn_plus --epochs 5 --patience 3
-python compare.py --dataset losloop
-```
-
-Dữ liệu Los-loop có 207 cảm biến, 2016 mốc thời gian, mỗi mốc 5 phút (mặc định). `--horizon 3` dự báo trực tiếp 5, 10, 15 phút. Nếu muốn 15/30/45/60 phút, dùng `--horizon 12` và xem 3/6/9/12 trong `per_horizon` (mỗi model dùng cùng horizon).
-
-Đổi sang SZ-taxi (156 đường, 2976 mốc, mỗi mốc 15 phút):
-
-```bash
 python download_data.py --dataset sztaxi
-python run_experiments.py --dataset sztaxi --epochs 80 --seeds 42 123 2026 --horizon 4 --seq-len 12
-python make_report.py --dataset sztaxi
 ```
 
-Nếu mạng không cho tải tự động, mở link sau trên trình duyệt, tải CSV và đổi tên vào `data/losloop/`:
+Tải từ repo của tác giả (`lehaifeng/T-GCN/data`). Nếu không tải tự động được: tải `los_speed.csv`, `los_adj.csv` (hoặc `sz_*`) và đặt thành `data/<dataset>/speed.csv`, `data/<dataset>/adjacency.csv`. `data/demo/` là dữ liệu **giả lập** chỉ để kiểm thử.
 
-- `speed.csv`: https://raw.githubusercontent.com/lehaifeng/T-GCN/master/data/los_speed.csv
-- `adjacency.csv`: https://raw.githubusercontent.com/lehaifeng/T-GCN/master/data/los_adj.csv
-
-Tương tự `sz_speed.csv` và `sz_adj.csv` với thư mục `data/sztaxi/`.
-
-## 4. Đánh giá checkpoint và trực quan hóa
+## 3. Kiểm thử nhanh
 
 ```bash
-python evaluate.py --checkpoint results/losloop/tgcn/seed_42/best.pt --plot-sensor 0
-python evaluate.py --checkpoint results/losloop/tgcn_plus/seed_42/best.pt --plot-sensor 10
-python compare.py --dataset losloop
-python make_report.py --dataset losloop
+python -m unittest discover -s tests -v
+python train.py --dataset demo --model tgcn --epochs 2 --max-train-batches 3 --max-val-batches 1 --device cpu
 ```
 
-Mỗi run lưu:
-
-- `best.pt`: checkpoint sau epoch có val MSE thấp nhất
-- `config.json`, `history.csv`, `training_summary.json`: cấu hình và lịch sử huấn luyện
-- `metrics.json`: MAE/RMSE/MAPE/WAPE overall, theo mỗi horizon
-- `test_predictions.npz`: `y_true`, `y_pred` có shape [mẫu, horizon, sensor], `time_indices`
-- `learning_curve.png`: biến thiên validation MSE theo epoch
-- `forecast_sensor.png`: biểu đồ đường thật theo thời gian thực, không nối các mẫu ngẫu nhiên
-- `scatter.png`: phân tán dự đoán–thực tế
-
-`results/<dataset>/comparison.csv`, `comparison_aggregated.csv`, `comparison.png` là bảng/ảnh so sánh. Tệp báo cáo tái tạo trong `reports/`.
-
-## 5. Ablation — kiểm chứng đóng góp
-
-Để đối chiếu tác dụng của từng cải tiến, chạy các lệnh sau với **cùng seq/horizon/split/seed**:
+## 4. Chạy lại toàn bộ thí nghiệm
 
 ```bash
-python train.py --dataset losloop --model tgcn_plus --seed 42 --result-dir results/losloop/ablations/full
-python train.py --dataset losloop --model tgcn_plus --seed 42 --no-time-features --result-dir results/losloop/ablations/no_time
-python train.py --dataset losloop --model tgcn_plus --seed 42 --no-adaptive-graph --result-dir results/losloop/ablations/no_graph
-python train.py --dataset losloop --model tgcn_plus --seed 42 --no-residual --result-dir results/losloop/ablations/no_residual
+python baselines.py --dataset losloop                 # persistence, HA, HA theo giờ, hồi quy tuyến tính
+python baselines.py --dataset sztaxi
+python run_suite.py --spec losloop:main losloop:improve losloop:variants losloop:tuning --jobs 4
+python run_suite.py --spec losloop:paper sztaxi:paper sztaxi:main sztaxi:improve --jobs 4
 ```
 
-Lưu ý: các run `--result-dir` ghi `model=tgcn_plus` trong CSV; có thể dùng cột `run` để phân biệt. So sánh hiệu quả dựa trên test RMSE/MAE; không gọi một cải tiến là hiệu quả nếu chưa đo trên cùng điều kiện.
+`run_suite.py` chạy song song và tiếp tục được khi bị ngắt (bỏ qua run đã có `metrics.json`). Nhóm thí nghiệm:
 
-## 6. Quy trình thực nghiệm để làm báo cáo
+| Nhóm | Nội dung |
+|---|---|
+| `main` | GRU, GCN, T-GCN × 3 seed (giai đoạn 1–2) |
+| `improve` | GRU-RT, T-GCN-RT (+ các biến thể tốt nhất) × 3 seed; SZ-taxi: loss bỏ qua số 0 |
+| `variants` | từng thành phần một: +residual, +thời gian, tách self/láng giềng, Â = I, đồ thị thích nghi, Huber, loss đơn vị gốc, self-loop = 1 |
+| `tuning` | cửa sổ L ∈ {6, 12, 24}, hidden ∈ {32, 64, 100} |
+| `paper` | tái lập đúng giao thức tác giả (`--protocol paper`: 80/20, chuẩn hóa max, chọn epoch theo test) |
 
-1. Chạy mọi mô hình trên **cùng** Los-loop/SZ-taxi, cùng cách tách train/validation/test theo thứ tự thời gian (70%/10%/20%).
-2. Chuẩn hóa theo thống kê train mỗi cảm biến, không tính từ val/test.
-3. Giữ seq_len, horizon, hidden_dim, epochs tối đa, patience, seed nhất quán khi hợp lý. Sự khác biệt loss của T-GCN+ phải được nêu rõ, có thể chạy ablation sau để tách tác dụng.
-4. Sử dụng ít nhất 3 seed và so sánh trung bình ± độ lệch chuẩn; biểu đồ từ `results`.
-5. Báo cáo riêng MAE, RMSE, MAPE (chỉ tốc độ >=5 đơn vị), WAPE; rõ đơn vị tốc độ theo nguồn.
-6. Phân tích từng horizon và từng sensor; đề xuất cải tiến chỉ khi kết quả thực tế hỗ trợ.
+Một run lẻ, ví dụ T-GCN-RT tách self/láng giềng:
+
+```bash
+python train.py --dataset losloop --model tgcn --self-sep --residual --time-features --horizon 12 --seed 42
+```
+
+Tùy chọn của `train.py`: `--model {gru,gcn,tgcn,tgcn_plus}`, `--residual`, `--time-features`, `--self-sep`, `--no-graph`, `--adaptive-graph`, `--loss {mse,huber,mae}`, `--raw-loss`, `--mask-zero`, `--normalization {zscore,max}`, `--protocol {strict,paper}`, `--track-test` (chỉ ghi RMSE test theo epoch để đo độ lạc quan, không dùng để chọn).
+
+## 5. Phân tích và báo cáo
+
+```bash
+python analysis/eda.py                                   # giai đoạn 1: kiểm tra dữ liệu, biểu đồ
+python analysis/compare_models.py --dataset losloop      # bảng chính, ensemble, so với bài báo, độ lạc quan
+python analysis/peak_hours.py --dataset losloop          # giờ cao điểm, kẹt xe, biến động mạnh
+python analysis/tuning_ablation.py --dataset losloop     # tinh chỉnh + ablation
+python analysis/feature_importance.py --dataset losloop  # ảnh hưởng thuộc tính, saliency
+python analysis/explain.py --dataset losloop             # skill, cổng GRU, Δ dự báo, thẻ mô hình
+python analysis/reliability.py --dataset losloop         # bootstrap, Diebold–Mariano, nhiễu, conformal
+python analysis/paper_protocol.py                        # tái lập giao thức tác giả
+python tools/export_models.py                            # models/*.pt (seed chọn theo validation)
+python tools/build_report.py                             # reports/BAO_CAO_TGCN.md (bảng điền từ CSV)
+python tools/md2docx.py reports/BAO_CAO_TGCN.md reports/BAO_CAO_TGCN.docx
+```
+
+Hình ở `reports/figures/`, bảng số liệu ở `reports/tables/`. Mỗi run trong `results/<dataset>/...` có `config.json`, `history.csv`, `metrics.json` (per-step, cumulative kiểu bài báo, Accuracy/R²/Var, bản bỏ số 0 cho SZ-taxi), `test_predictions.npz`, `best.pt`, `learning_curve.png`.
+
+## 6. Dùng mô hình đã huấn luyện để dự báo
+
+```bash
+python predict.py --checkpoint models/losloop_gru_res_time_seed*.pt --input data/losloop/speed.csv --end-time "2012-03-07 07:30" --compare
+```
+
+Checkpoint tự chứa trọng số, cấu hình và thống kê chuẩn hóa của train; truyền nhiều checkpoint để lấy trung bình (ensemble); dự báo được cắt về ≥ 0. `models/index.json` mô tả từng tệp.
 
 ## 7. Cấu trúc
 
 ```
-TGCN_Traffic_Project/
-  data/demo/                # Dữ liệu GIẢ LẬP được ghi rõ
-  tgcn/                     # Data loader, model, metrics, training, plotting
-  tests/                    # Unit tests
-  reports/                  # Mẫu và báo cáo tạo tự động
-  download_data.py          # Tải dataset THẬT từ T-GCN GitHub
-  train.py / evaluate.py    # Huấn luyện và đánh giá
-  run_experiments.py        # Baseline GRU, T-GCN, T-GCN+
-  compare.py / make_report.py
-  RUN_COLAB.ipynb           # Notebook chạy thử trên Colab
-  CHANGES.md                # Giải thích cải tiến và khác biệt gốc
+tgcn/            data.py (chuẩn hóa, Â như mã tác giả, cửa sổ, --protocol paper) · models.py · training.py · metrics.py · plotstyle.py
+baselines.py     train.py · evaluate.py · predict.py · run_suite.py
+analysis/        eda · compare_models · peak_hours · tuning_ablation · feature_importance · explain · reliability · paper_protocol
+tools/           export_models · build_report · md2docx
+models/          checkpoint cuối cùng
+reports/         BAO_CAO_TGCN.md/.docx, figures/, tables/
+tests/           8 unit test
 ```
 
-## 8. Nguồn, thừa nhận và giới hạn
+`run_experiments.py`, `compare.py`, `make_report.py`, `run_ablations.py` là công cụ của phiên bản đầu, vẫn chạy được nhưng đã được thay bằng `run_suite.py` và `analysis/`.
 
-- Bài báo: Zhao et al. (2019), *T-GCN: A Temporal Graph Convolutional Network for Traffic Prediction*. IEEE TITS. https://arxiv.org/abs/1811.05320
-- Repo tác giả, dữ liệu: https://github.com/lehaifeng/T-GCN ; https://github.com/lehaifeng/T-GCN/tree/master/data
-- Dữ liệu không tải trước trong môi trường tạo ZIP, downloader hoạt động khi có internet. Không có cam kết GPU/performance khi chưa train trên dữ liệu thật.
-- Timestamp của data CSV gốc không nằm trong từng hàng; mã dùng mốc bắt đầu và khoảng lấy mẫu từ tài liệu để sinh các feature thời gian, giả định chuỗi liên tục không mất bước.
-- Đồ thị được đối xứng hóa và chuẩn hóa, phù hợp dữ liệu mẫu; nếu nghiên cứu hướng đường có chiều, cần chỉnh định nghĩa adjacency.
+## 8. Nguồn và giới hạn
 
-### Thử riêng tác dụng của Huber loss
-
-```bash
-python train.py --dataset losloop --model tgcn_plus --loss huber --result-dir results/losloop/ablations/huber_loss
-```
-
-**Chú ý:** Thí nghiệm chính để so sánh công bằng đều mặc định dùng `--loss mse`.
-
-Có thể chạy **toàn bộ 5 thí nghiệm ablation** bằng một lệnh:
-
-```bash
-python run_ablations.py --dataset losloop --epochs 50 --seed 42
-```
+- Zhao et al. (2019), *T-GCN: A Temporal Graph Convolutional Network for Traffic Prediction*, IEEE T-ITS — arXiv:1811.05320; mã và dữ liệu: github.com/lehaifeng/T-GCN.
+- Li et al. (2018), *Diffusion Convolutional Recurrent Neural Network* — gợi ý cho cách tích chập đồ thị giữ tín hiệu của chính nút.
+- Cài đặt độc lập, không phải mã gốc. Los-loop chỉ 7 ngày (test ≈ 1.4 ngày); huấn luyện ≤ 120 epoch trên CPU (tác giả: 3000). Dữ liệu không có cột thời gian: mốc được dựng từ ngày bắt đầu trong bài báo (đã kiểm chứng bằng hồ sơ giờ cao điểm).
