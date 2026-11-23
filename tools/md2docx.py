@@ -104,8 +104,10 @@ def convert(md_path, out_path):
             p = doc.add_paragraph(style='List Bullet' if not m.group(1) else 'List Bullet 2')
             add_runs(p, m.group(2)); i += 1; continue
         m = re.match(r'^\s*(\d+)\.\s+(.*)', line)
-        if m:
-            p = doc.add_paragraph(style='List Number'); add_runs(p, m.group(2)); i += 1; continue
+        if m:  # keep the number written in the markdown (Word's List Number would continue across lists)
+            p = doc.add_paragraph(); p.paragraph_format.left_indent = Cm(0.9)
+            p.paragraph_format.first_line_indent = Cm(-0.6); p.paragraph_format.space_after = Pt(3)
+            p.add_run(m.group(1) + '. '); add_runs(p, m.group(2)); i += 1; continue
         if line.startswith('>'):
             p = doc.add_paragraph(); p.paragraph_format.left_indent = Cm(0.8)
             add_runs(p, line.lstrip('> ').strip()); [setattr(r, 'italic', True) for r in p.runs]
