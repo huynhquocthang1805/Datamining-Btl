@@ -35,6 +35,8 @@ def build_parser():
     p.add_argument('--protocol',choices=['strict','paper'],default='strict',
                    help="paper = authors' protocol (80/20, max-norm, epoch picked on TEST). "
                         'Only for reproducing Table 1; never for honest evaluation.')
+    p.add_argument('--raw-loss',action='store_true',
+                   help='Weight the loss by per-sensor variance = MSE in original units.')
     p.add_argument('--mask-zero',action='store_true',
                    help='Ignore zero targets (missing in SZ-taxi) in loss and selection.')
     p.add_argument('--track-test',action='store_true',

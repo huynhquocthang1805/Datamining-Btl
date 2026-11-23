@@ -51,6 +51,12 @@ def train_model(model, loaders, device, args, output_dir, bundle=None):
                  if getattr(args, 'lr_schedule', 'none') == 'cosine' else None)
     criterion = _loss_fn(args.loss)
     mask_zero = bool(getattr(args, 'mask_zero', False))
+    # raw_loss: weight each sensor by std^2 so that the z-space MSE equals the MSE in
+    # original speed units (up to a constant) -> congested, high-variance sensors count more
+    node_w = None
+    if getattr(args, 'raw_loss', False) and bundle is not None:
+        sd = torch.as_tensor(bundle.stds, dtype=torch.float32)
+        node_w = (sd ** 2 / (sd ** 2).mean()).to(device)
     track_test = bool(getattr(args, 'track_test', False)) and bundle is not None
     history = []; best = float('inf'); stale = 0; best_epoch = -1
     model = model.to(device)
@@ -69,7 +75,10 @@ def train_model(model, loaders, device, args, output_dir, bundle=None):
             optimizer.zero_grad(set_to_none=True)
             output = model(x, tf)
             m = target_mask(bundle, t, y.shape[1]).to(device) if (mask_zero and bundle is not None) else None
-            loss = masked_mean(criterion(output, y), m)
+            err = criterion(output, y)
+            if node_w is not None:
+                err = err * (node_w if args.loss == 'mse' else node_w.sqrt())
+            loss = masked_mean(err, m)
             if not torch.isfinite(loss):
                 raise RuntimeError('Non-finite loss: check learning rate, data, normalization.')
             loss.backward()
@@ -81,6 +90,8 @@ def train_model(model, loaders, device, args, output_dir, bundle=None):
                 if args.max_val_batches and batch_idx >= args.max_val_batches: break
                 p = model(x.to(device), tf.to(device))
                 e = (p - y.to(device)) ** 2
+                if node_w is not None:
+                    e = e * node_w
                 if mask_zero and bundle is not None:
                     m = target_mask(bundle, t, y.shape[1]).to(device)
                     val_se += float((e * m).sum()); n += float(m.sum())

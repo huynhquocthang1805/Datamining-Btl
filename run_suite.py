@@ -41,7 +41,7 @@ def configs(dataset, groups):
             for m in ('gru', 'gcn', 'tgcn'):
                 runs.append((f'main/{m}/seed_{s}', ['--model', m, '--seed', str(s), *base()]))
     if 'improve' in groups:       # phase 3: improvements (3 seeds for the key pair)
-        for s in SEEDS:
+        for s in (SEEDS if dataset == 'losloop' else [42]):   # SZ-taxi: secondary dataset, 1 seed
             runs.append((f'improve/tgcn_res_time/seed_{s}', ['--model', 'tgcn', *RT, '--seed', str(s), *base()]))
             runs.append((f'improve/gru_res_time/seed_{s}', ['--model', 'gru', *RT, '--seed', str(s), *base()]))
         if dataset == 'sztaxi':
@@ -51,7 +51,9 @@ def configs(dataset, groups):
                          ['--model', 'tgcn', '--mask-zero', '--seed', '42', *base()]))
     if 'variants' in groups:      # one component at a time (seed 42)
         one = {'tgcn_selfsep_res_time': ['--model', 'tgcn', '--self-sep', *RT],
+               'gru_res_time_rawloss': ['--model', 'gru', *RT, '--raw-loss'],
                'tgcn_selfsep': ['--model', 'tgcn', '--self-sep'],
+               'tgcn_res_time_rawloss': ['--model', 'tgcn', *RT, '--raw-loss'],
                'tgcn_res': ['--model', 'tgcn', '--residual'],
                'tgcn_time': ['--model', 'tgcn', '--time-features'],
                'tgcn_plus': ['--model', 'tgcn_plus'],
