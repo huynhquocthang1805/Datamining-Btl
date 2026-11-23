@@ -58,7 +58,7 @@ def main():
             for sel_name, sel in (('cao điểm', peak[:, None] & valid), ('ngoài cao điểm', ~peak[:, None] & valid),
                                   ('kẹt xe (v<%g)' % CONGESTED[ds], cong & valid),
                                   ('thông thoáng', ~cong & valid),
-                                  ('biến động mạnh |Δ|>10', (change > 10) & valid),
+                                  ('biến động mạnh (Δ>10)', (change > 10) & valid),
                                   ('tất cả', valid)):
                 e = errs[:, sel]
                 rows.append({'model': name, 'horizon': hname, 'subset': sel_name,
