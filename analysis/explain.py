@@ -45,7 +45,8 @@ def skill(by, ds):
     naive = key(by['naive'][0]['metrics'])['per_horizon']
     rows = []
     fig, ax = plt.subplots(figsize=(8, 3.8))
-    for i, name in enumerate(['linear', 'gcn', 'gru', 'tgcn', 'gru_res_time', 'tgcn_res_time']):
+    for i, name in enumerate(['linear', 'gcn', 'gru', 'tgcn', 'tgcn_selfsep', 'gru_res_time', 'tgcn_res_time',
+                              'tgcn_selfsep_res_time']):
         if name not in by: continue
         ss = np.array([[1 - key(r['metrics'])['per_horizon'][k]['RMSE'] ** 2 / naive[k]['RMSE'] ** 2 for k in ks]
                        for r in by[name]])
@@ -54,6 +55,12 @@ def skill(by, ds):
         for k, v in zip(ks, ss.mean(0)):
             rows.append({'model': name, 'horizon': k, 'skill_vs_naive_%': 100 * v})
     ax.axhline(0, color=ps.INK2, lw=1, ls='--')
+    lo = min(r['skill_vs_naive_%'] for r in rows)
+    if lo < -40:
+        ax.set_ylim(-40, None)
+        worst = min(rows, key=lambda r: r['skill_vs_naive_%'])
+        ax.text(x[0], -38, f"{ps.label(worst['model'])}: {worst['skill_vs_naive_%']:.0f}% ở {worst['horizon']} (ngoài khung)",
+                fontsize=8, color=ps.INK2, va='bottom')
     ax.text(x[-1], 1, 'Naive (giữ giá trị cuối) = 0%', ha='right', va='bottom', fontsize=8, color=ps.INK2)
     ax.set(xlabel='Tầm dự báo (phút)', ylabel='Skill = 1 − MSE/MSE_naive (%)',
            title=f'{ds}: mô hình hơn "giữ nguyên giá trị cuối" bao nhiêu?')
