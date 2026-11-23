@@ -207,7 +207,24 @@ def oracle_stats():
     return df['optimistic_bias_%'].mean(), df['optimistic_bias_%'].max()
 
 
-FILL = {'ORACLE_TABLE': oracle_table,'PEAK_TABLE': peak_table, 'ABLATION_TABLE': ablation_table, 'TUNING_TABLE': tuning_table,
+def paper_protocol_table():
+    df = pd.read_csv(TAB / 'paper_protocol.csv')
+    rows = []
+    for _, r in df.iterrows():
+        mins = '15 phút'
+        if r.model == 'naive':
+            rows.append({'Bộ dữ liệu': r.dataset, 'Mô hình': label('naive'), 'epoch train': '—',
+                         'Chúng tôi (RMSE / MAE)': f'{r.RMSE:.3f} / {r.MAE:.3f}', 'Bài báo (RMSE / MAE)': '— (không báo cáo)',
+                         'Accuracy / R² (chúng tôi | bài báo)': '—'})
+            continue
+        rows.append({'Bộ dữ liệu': r.dataset, 'Mô hình': label(r.model), 'epoch train': f'{int(r.epochs)} (tốt nhất: {int(r.best_epoch)})',
+                     'Chúng tôi (RMSE / MAE)': f'{r.RMSE:.3f} / {r.MAE:.3f}',
+                     'Bài báo (RMSE / MAE)': f'{r.paper_RMSE:.3f} / {r.paper_MAE:.3f}',
+                     'Accuracy / R² (chúng tôi | bài báo)': f'{r.Accuracy:.3f} / {r.R2:.3f} | {r.paper_Accuracy:.3f} / {r.paper_R2:.3f}'})
+    return md(pd.DataFrame(rows))
+
+
+FILL = {'ORACLE_TABLE': oracle_table, 'PAPER_PROTOCOL_TABLE': paper_protocol_table,'PEAK_TABLE': peak_table, 'ABLATION_TABLE': ablation_table, 'TUNING_TABLE': tuning_table,
         'MAIN_TABLE': main_table, 'FI_TABLE': fi_table, 'SEED_TABLE': seed_table,
         'PAIRWISE_TABLE': pairwise_table, 'CONFORMAL_TABLE': conformal_table, 'PAPER_TABLE': paper_table,
         'MODEL_CARD_TABLE': model_card, 'PREDICT_EXAMPLE': predict_example,
