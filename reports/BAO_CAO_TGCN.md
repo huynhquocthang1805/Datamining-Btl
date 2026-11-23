@@ -233,7 +233,28 @@ Hình 9 cho thấy thêm: mọi mô hình đều "trễ" khoảng một tầm d�
 
 ### 5.4 Giai đoạn 3 — Thử cải thiện: cửa sổ đầu vào, hidden units, đặc trưng thời gian, residual
 
-TUNING_SECTION
+Theo yêu cầu đề tài, chúng tôi thử ba "núm vặn" trên T-GCN: độ dài cửa sổ đầu vào, số hidden units và đặc trưng thời gian; sau đó thử thêm các thay đổi về *cách đặt bài toán* (residual, hàm mất mát) và về *cách dùng đồ thị*. Tinh chỉnh dùng seed 42 (so với cấu hình mặc định cùng seed).
+
+**Cửa sổ đầu vào và số hidden units:**
+
+| Cấu hình (seed 42) | tham số | RMSE TB | MAE TB | 15 phút | 60 phút | epoch chọn | thời gian train (phút) |
+|---|---|---|---|---|---|---|---|
+| T-GCN, L = 12, hidden = 64 (mặc định) | 13,452 | 7.482 | 4.336 | 6.15 / 3.65 | 9.07 / 5.35 | 65 | 20 |
+| T-GCN, L = 6 (30 phút) | 13,452 | 7.578 | 4.451 | 6.14 / 3.68 | 9.29 / 5.56 | 105 | 25 |
+| T-GCN, L = 24 (120 phút) | 13,452 | 7.483 | 4.404 | 6.17 / 3.72 | 9.02 / 5.38 | 47 | 35 |
+| T-GCN, hidden = 32 | 3,660 | 7.466 | 4.370 | 6.14 / 3.67 | 9.08 / 5.38 | 117 | 15 |
+| T-GCN, hidden = 100 | 31,812 | 7.533 | 4.431 | 6.16 / 3.68 | 9.17 / 5.53 | 56 | 35 |
+| T-GCN-RT, L = 12 | 14,220 | 7.350 | 4.324 | 6.13 / 3.61 | 8.83 / 5.35 | 33 | 13 |
+| T-GCN-RT, L = 6 | 14,220 | 7.272 | 4.382 | 6.03 / 3.63 | 8.80 / 5.48 | 55 | 10 |
+| T-GCN-RT, L = 24 | 14,220 | 7.526 | 4.384 | 6.15 / 3.62 | 9.12 / 5.44 | 35 | 27 |
+
+![Hình 10. Tinh chỉnh cửa sổ đầu vào và số hidden units (hàng trên RMSE, hàng dưới MAE)](figures/tuning_losloop.png)
+
+- **Cửa sổ L:** với T-GCN gốc, L = 6 (30 phút) kém hơn L = 12 (RMSE 7.58 so với 7.48, chủ yếu ở 60 phút: 9.29 so với 9.07) — nửa giờ lịch sử không đủ thấy xu hướng. L = 24 (2 giờ) không cải thiện mà tăng gấp đôi thời gian huấn luyện; với T-GCN-RT còn kém hơn (7.53 so với 7.35) vì thông tin > 1 giờ trước gần như không liên quan (tự tương quan ở 120 phút chỉ 0.29) mà làm mô hình dễ quá khớp. MAE nhỏ nhất ở L = 12 cho cả hai mô hình.
+- **Hidden units:** 32 ≈ 64 (7.47 so với 7.48) với ¼ số tham số (3 660 so với 13 452); 100 kém hơn một chút (7.53 / 4.43) và quá khớp sớm hơn. Khớp nhận xét của bài báo (sai số giảm rồi tăng theo số hidden), nhưng biên độ chỉ ~1%.
+- **Đặc trưng thời gian:** xem bảng ablation dưới (RMSE −3.4% nhưng MAE +3.1% nếu thêm riêng lẻ).
+
+⇒ **Siêu tham số không phải đòn bẩy chính**: trong khoảng thử, mọi thay đổi ≤ 1.3% — nhỏ hơn nhiều tác động của residual + thời gian (−6% với GRU). Lựa chọn L = 12, hidden = 64 của bài báo là hợp lý.
 
 **Từng thành phần một (cùng seed 42, so với T-GCN gốc):**
 
@@ -254,7 +275,7 @@ TUNING_SECTION
 | T-GCN-RT + loss đơn vị gốc | 7.398 | 4.338 | 6.11 / 3.56 | 8.94 / 5.47 | -1.1% | +0.0% | 18 |
 | GRU-RT + loss đơn vị gốc | 6.938 | 4.032 | 5.78 / 3.37 | 8.36 / 5.01 | -7.3% | -7.0% | 35 |
 
-![Hình 10. Đóng góp của từng thành phần (thay đổi % RMSE/MAE so với T-GCN gốc, TB 12 tầm, seed 42)](figures/ablation_losloop.png)
+![Hình 11. Đóng góp của từng thành phần (thay đổi % RMSE/MAE so với T-GCN gốc, TB 12 tầm, seed 42)](figures/ablation_losloop.png)
 
 Đọc bảng ablation theo cặp có kiểm soát:
 

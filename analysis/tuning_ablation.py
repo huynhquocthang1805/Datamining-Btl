@@ -77,25 +77,26 @@ def main():
            title=f'{ds}: đóng góp của từng thành phần (seed 42, trung bình 12 tầm dự báo)')
     ax.legend(loc='lower right'); ax.grid(axis='y', visible=False)
     fig.tight_layout(); fig.savefig(FIG / f'ablation_{ds}.png'); plt.close(fig)
-    # figure: tuning
-    fig, axes = plt.subplots(1, 2, figsize=(11, 3.6), sharey=True)
+    # figure: tuning (2x2 small multiples: rows = metric, cols = knob)
+    fig, axes = plt.subplots(2, 2, figsize=(11, 5.6), sharex='col')
     seq = [(6, s42.get(('tuning', 'tgcn_seq6'))), (12, base), (24, s42.get(('tuning', 'tgcn_seq24')))]
     seq_rt = [(6, s42.get(('tuning', 'tgcn_res_time_seq6'))), (12, s42.get(('improve', 'tgcn_res_time'))),
               (24, s42.get(('tuning', 'tgcn_res_time_seq24')))]
     hid = [(32, s42.get(('tuning', 'tgcn_h32'))), (64, base), (100, s42.get(('tuning', 'tgcn_h100')))]
-    for ax, series, xl in ((axes[0], [('tgcn', seq), ('tgcn_res_time', seq_rt)], 'Độ dài cửa sổ đầu vào L (bước 5 phút)'),
-                           (axes[1], [('tgcn', hid)], 'Số hidden units')):
-        for i, (name, pts) in enumerate(series):
-            pts = [(x, r) for x, r in pts if r is not None]
-            if not pts: continue
-            ax.plot([x for x, _ in pts], [r['metrics']['overall']['RMSE'] for _, r in pts], marker='o',
-                    color=ps.color(name), label=f'{ps.label(name)} — RMSE')
-            ax.plot([x for x, _ in pts], [r['metrics']['overall']['MAE'] for _, r in pts], marker='s', ls=':',
-                    color=ps.color(name), label=f'{ps.label(name)} — MAE')
-        ax.set(xlabel=xl)
-    axes[0].set_ylabel('Sai số test (TB 12 tầm)'); axes[0].legend(fontsize=7.5)
-    axes[0].set_title('Cửa sổ đầu vào'); axes[1].set_title('Số hidden units')
-    fig.suptitle(f'{ds}: tinh chỉnh siêu tham số (seed 42)', fontsize=11.5)
+    for col, series, xl, xt in ((0, [('tgcn', seq), ('tgcn_res_time', seq_rt)], 'Cửa sổ đầu vào L (bước 5 phút)', [6, 12, 24]),
+                                (1, [('tgcn', hid)], 'Số hidden units', [32, 64, 100])):
+        for ri, key in ((0, 'RMSE'), (1, 'MAE')):
+            ax = axes[ri][col]
+            for name, pts in series:
+                pts = [(x, r) for x, r in pts if r is not None]
+                if not pts: continue
+                ax.plot([x for x, _ in pts], [r['metrics']['overall'][key] for _, r in pts], marker='o', ms=6,
+                        color=ps.color(name), label=ps.label(name))
+            ax.set(xticks=xt, ylabel=f'{key} test (TB 12 tầm)')
+            if ri == 1: ax.set_xlabel(xl)
+    axes[0][0].set_title('Độ dài cửa sổ đầu vào'); axes[0][1].set_title('Số hidden units (T-GCN gốc)')
+    axes[0][0].legend(fontsize=8)
+    fig.suptitle(f'{ds}: tinh chỉnh siêu tham số (seed 42) — mọi khác biệt ≤ ~1.3%', fontsize=11.5)
     fig.tight_layout(); fig.savefig(FIG / f'tuning_{ds}.png'); plt.close(fig)
 
 
