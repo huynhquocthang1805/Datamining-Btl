@@ -44,6 +44,10 @@ def configs(dataset, groups):
         for s in (SEEDS if dataset == 'losloop' else [42]):   # SZ-taxi: secondary dataset, 1 seed
             runs.append((f'improve/tgcn_res_time/seed_{s}', ['--model', 'tgcn', *RT, '--seed', str(s), *base()]))
             runs.append((f'improve/gru_res_time/seed_{s}', ['--model', 'gru', *RT, '--seed', str(s), *base()]))
+        if dataset == 'losloop':  # best graph variant gets 3 seeds too (seed 42 lives in variants/)
+            for s in SEEDS[1:]:
+                runs.append((f'improve/tgcn_selfsep_res_time/seed_{s}',
+                             ['--model', 'tgcn', '--self-sep', *RT, '--seed', str(s), *base()]))
         if dataset == 'sztaxi':
             runs.append(('improve/tgcn_res_time_masked/seed_42',
                          ['--model', 'tgcn', *RT, '--mask-zero', '--seed', '42', *base()]))
