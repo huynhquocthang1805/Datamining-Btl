@@ -134,7 +134,8 @@ def plot_horizon(by, interval, dataset, view, names):
                 ax.fill_between(x, v.min(0), v.max(0), color=ps.color(name, i), alpha=.15, lw=0)
     axes[0].set(xlabel='Thời gian dự báo trước (phút)', ylabel='RMSE', title='RMSE theo tầm dự báo')
     axes[1].set(xlabel='Thời gian dự báo trước (phút)', ylabel='MAE', title='MAE theo tầm dự báo')
-    axes[1].legend(loc='upper left', fontsize=8)
+    h, l = axes[0].get_legend_handles_labels()
+    fig.legend(h, l, loc='lower center', ncol=4, fontsize=8, bbox_to_anchor=(0.5, -0.1))
     fig.suptitle(f'{dataset}: sai số theo từng bước (dải mờ = min–max qua 3 seed)'
                  + (' — chỉ mục tiêu ≠ 0' if view == 'masked' else ''), fontsize=11.5)
     fig.tight_layout(); fig.savefig(FIG / f'cmp_horizon_{dataset}{"_masked" if view == "masked" else ""}.png')
@@ -180,11 +181,29 @@ def oracle_bias(runs):
     return df
 
 
+def all_runs_table(runs, ds):
+    """Every finished run with its per-step metrics (results/ itself is not committed)."""
+    rows = []
+    for r in runs:
+        m = r['metrics']
+        row = {'group': r['group'], 'config': r['name'], 'seed': r['seed'], 'best_epoch': m.get('best_epoch'),
+               'RMSE_all': m['overall']['RMSE'], 'MAE_all': m['overall']['MAE'],
+               'MAPE_all_%': m['overall']['MAPE_percent'], 'R2_all': m['overall'].get('R2')}
+        for k, v in m['per_horizon'].items():
+            row[f'RMSE_{k}'] = v['RMSE']; row[f'MAE_{k}'] = v['MAE']
+        if 'masked_nonzero' in m:
+            row['RMSE_all_nonzero'] = m['masked_nonzero']['overall']['RMSE']
+            row['MAE_all_nonzero'] = m['masked_nonzero']['overall']['MAE']
+        rows.append(row)
+    pd.DataFrame(rows).sort_values(['group', 'config', 'seed']).to_csv(TAB / f'all_runs_{ds}.csv', index=False)
+
+
 def main():
     p = argparse.ArgumentParser(); p.add_argument('--dataset', default='losloop')
     a = p.parse_args(); ds = a.dataset
     interval = 5 if ds == 'losloop' else 15
     runs, by = collect(ds)
+    all_runs_table(runs, ds)
     for name in ENSEMBLE_OF:
         ens = ensemble(by, name, ds, interval)
         if ens is not None:
@@ -200,7 +219,7 @@ def main():
         md.append(f'### {ds} — kết quả test ({view})\n\n' + df_to_markdown(df))
         print(df.to_string())
         plot_horizon(by, interval, ds, view,
-                     ['naive', 'linear', 'gcn', 'gru', 'tgcn', 'gru_res_time', 'tgcn_res_time'])
+                     ['naive', 'linear', 'gcn', 'gru', 'tgcn', 'tgcn_selfsep', 'gru_res_time', 'tgcn_res_time'])
     pdf = table_paper(by, ds, interval)
     print(pdf.round(4).to_string())
     ob = oracle_bias(runs)
