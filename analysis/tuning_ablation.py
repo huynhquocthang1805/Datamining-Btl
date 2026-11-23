@@ -44,6 +44,7 @@ def main():
     print(tdf.round(3).to_string())
     # ---------- ablation (one component at a time) ----------
     labels = {('main', 'gru'): 'GRU (không đồ thị)', ('main', 'tgcn'): 'T-GCN (gốc)',
+              ('variants', 'tgcn_selfloop1'): 'T-GCN, self-loop = 1 (bản cài đặt đầu)',
               ('variants', 'tgcn_time'): '+ thời gian', ('variants', 'tgcn_res'): '+ residual',
               ('variants', 'tgcn_selfsep'): '+ tách self/láng giềng',
               ('improve', 'tgcn_res_time'): '+ residual + thời gian (T-GCN-RT)',
@@ -52,6 +53,8 @@ def main():
               ('variants', 'tgcn_selfsep_res_time'): 'T-GCN-RT + tách self/láng giềng',
               ('variants', 'tgcn_plus'): 'T-GCN-RT + đồ thị thích nghi (T-GCN+)',
               ('variants', 'tgcn_res_time_huber'): 'T-GCN-RT + Huber loss',
+              ('variants', 'tgcn_res_time_rawloss'): 'T-GCN-RT + loss đơn vị gốc',
+              ('variants', 'gru_res_time_rawloss'): 'GRU-RT + loss đơn vị gốc',
               ('baselines', 'naive'): 'Naive (giữ giá trị cuối)'}
     ab = [row(s42[k], v, ks) for k, v in labels.items() if k in s42]
     adf = pd.DataFrame(ab)
