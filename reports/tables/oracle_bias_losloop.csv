@@ -1,0 +1,3 @@
+config,seed,best_epoch_val,oracle_epoch_test,test_RMSE_val_selected,test_RMSE_test_selected,optimistic_bias_%
+main/gcn,123,117,55,8.845639611300387,8.827163925099976,0.208867724803166
+main/gcn,42,105,80,8.8582268393367,8.836712694303042,0.24287191357665383

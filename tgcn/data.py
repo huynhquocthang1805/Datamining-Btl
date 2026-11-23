@@ -24,6 +24,8 @@ class DataBundle:
     sensor_ids: list[str]
     interval_min: int
     data_dir: Path
+    timestamps: pd.DatetimeIndex = None  # [T] wall-clock time of each step
+    normalization: str = 'zscore'
 
 
 def read_csv_dataset(data_dir: Path):
@@ -75,8 +77,19 @@ def make_time_features(length: int, start_time: str, interval_min: int) -> np.nd
 
 
 def load_bundle(data_dir: str | Path, dataset: str, seq_len=12, horizon=3,
-                train_ratio=0.7, val_ratio=0.1, interval_min=None, start_time=None) -> DataBundle:
+                train_ratio=0.7, val_ratio=0.1, interval_min=None, start_time=None,
+                normalization='zscore', protocol='strict') -> DataBundle:
+    """Chronological split train | val | test.
+
+    normalization='zscore': per-sensor mean/std of the TRAIN part (default).
+    normalization='max'   : divide everything by the global max of the TRAIN part
+                            (the authors divide by the max of the whole series,
+                            which leaks a test statistic; we keep it train-only).
+    """
     values, adj, sensor_ids = read_csv_dataset(Path(data_dir))
+    if protocol == 'paper':
+        return _paper_bundle(values, adj, sensor_ids, dataset, seq_len, horizon,
+                             interval_min, start_time, data_dir)
     if train_ratio <= 0 or val_ratio <= 0 or train_ratio + val_ratio >= 1:
         raise ValueError('0 < train_ratio, val_ratio và train_ratio+val_ratio < 1.')
     t = len(values)
@@ -84,20 +97,49 @@ def load_bundle(data_dir: str | Path, dataset: str, seq_len=12, horizon=3,
     if min(train_end - seq_len - horizon, val_end - train_end - horizon,
            t - val_end - horizon) <= 0:
         raise ValueError('Split quá ngắn so với seq_len, horizon.')
-    means = values[:train_end].mean(axis=0)
-    stds = values[:train_end].std(axis=0)
-    stds[stds < 1e-6] = 1.0
+    if normalization == 'zscore':
+        means = values[:train_end].mean(axis=0)
+        stds = values[:train_end].std(axis=0)
+        stds[stds < 1e-6] = 1.0
+    elif normalization == 'max':
+        means = np.zeros(values.shape[1], dtype=np.float32)
+        stds = np.full(values.shape[1], float(values[:train_end].max()), dtype=np.float32)
+    else:
+        raise ValueError(f'Unknown normalization {normalization}')
     scaled = (values - means[None, :]) / stds[None, :]
     default_start, default_interval = DEFAULTS.get(dataset, DEFAULTS['demo'])
     interval_min = default_interval if interval_min is None else interval_min
     start_time = default_start if start_time is None else start_time
-    return DataBundle(values, scaled.astype(np.float32), means, stds,
+    return DataBundle(values, scaled.astype(np.float32), means.astype(np.float32),
+                      stds.astype(np.float32),
                       normalized_adjacency(adj),
                       make_time_features(t, start_time, interval_min),
                       {'train': (seq_len, train_end),
                        'val': (train_end, val_end),
                        'test': (val_end, t)},
-                      sensor_ids, interval_min, Path(data_dir))
+                      sensor_ids, interval_min, Path(data_dir),
+                      pd.date_range(start=start_time, periods=t, freq=f'{interval_min}min'),
+                      normalization)
+
+
+def _paper_bundle(values, adj, sensor_ids, dataset, seq_len, horizon, interval_min, start_time, data_dir):
+    """Replicates the authors' protocol (input_data.py / main.py of lehaifeng/T-GCN):
+    80% train / 20% test, x / max(whole series), test windows built only from the
+    test segment, and *the test set doubles as validation* (they keep the epoch
+    with the minimum test RMSE). Used only to reproduce and criticise Table 1."""
+    t = len(values); train_end = int(t * 0.8)
+    mx = float(values.max())
+    means = np.zeros(values.shape[1], dtype=np.float32)
+    stds = np.full(values.shape[1], mx, dtype=np.float32)
+    default_start, default_interval = DEFAULTS.get(dataset, DEFAULTS['demo'])
+    interval_min = default_interval if interval_min is None else interval_min
+    start_time = default_start if start_time is None else start_time
+    test = (train_end + seq_len, t)
+    return DataBundle(values, (values / mx).astype(np.float32), means, stds,
+                      normalized_adjacency(adj), make_time_features(t, start_time, interval_min),
+                      {'train': (seq_len, train_end), 'val': test, 'test': test},
+                      sensor_ids, interval_min, Path(data_dir),
+                      pd.date_range(start=start_time, periods=t, freq=f'{interval_min}min'), 'max')
 
 
 class TrafficWindows(Dataset):
@@ -123,12 +165,19 @@ class TrafficWindows(Dataset):
                 torch.tensor(t, dtype=torch.long))
 
 
-def make_loaders(bundle, seq_len, horizon, batch_size, workers=0):
+def make_loaders(bundle, seq_len, horizon, batch_size, workers=0, eval_batch_size=256):
     sets = {s: TrafficWindows(bundle, s, seq_len, horizon) for s in ('train','val','test')}
-    loaders = {s: DataLoader(ds, batch_size=batch_size, shuffle=(s=='train'),
+    loaders = {s: DataLoader(ds, batch_size=(batch_size if s == 'train' else eval_batch_size),
+                             shuffle=(s=='train'),
                              num_workers=workers, pin_memory=torch.cuda.is_available())
                for s, ds in sets.items()}
     return loaders
+
+
+def target_mask(bundle: DataBundle, t_index: torch.Tensor, horizon: int) -> torch.Tensor:
+    """Boolean [B,H,N]: True where the raw target is observed (non-zero)."""
+    rows = t_index[:, None] + torch.arange(horizon)[None, :]
+    return torch.from_numpy(bundle.values != 0)[rows]
 
 
 def inverse_transform(x: np.ndarray, bundle: DataBundle) -> np.ndarray:

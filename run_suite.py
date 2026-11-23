@@ -1,0 +1,117 @@
+"""Run the full experiment suite of the report (resumable, parallel on CPU).
+
+Every run is `train.py` with one configuration; finished runs (metrics.json
+present) are skipped, so the script can be re-launched after an interruption.
+
+    python run_suite.py --dataset losloop --groups main improve tuning --jobs 4
+    python run_suite.py --dataset sztaxi  --groups main improve --jobs 4
+
+Groups
+  main     : phase 1+2 — GRU, GCN, T-GCN as in the paper (3 seeds)
+  improve  : phase 3   — T-GCN-RT (residual + time features) vs GRU-RT (3 seeds)
+  tuning   : phase 3   — input window and hidden units of T-GCN (1 seed)
+  variants : one component at a time, incl. graph removed (A = I) (1 seed)
+"""
+import argparse
+import os
+import subprocess
+import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from tgcn.utility import ROOT
+
+SEEDS = [42, 123, 2026]
+DATASET_DEFAULTS = {  # 15..60 min ahead; hidden 64 (paper's choice for Los-loop)
+    'losloop': dict(horizon=12, seq_len=12, hidden=64),
+    'sztaxi': dict(horizon=4, seq_len=12, hidden=64),
+    'demo': dict(horizon=4, seq_len=12, hidden=16),
+}
+RT = ['--residual', '--time-features']
+
+
+def configs(dataset, groups):
+    """Returns [(run_name, train.py flags)] in priority order."""
+    d = DATASET_DEFAULTS[dataset]
+    base = lambda L=d['seq_len'], hd=d['hidden']: ['--horizon', str(d['horizon']),
+                                                  '--seq-len', str(L), '--hidden-dim', str(hd)]
+    runs = []
+    if 'main' in groups:          # phase 1 + 2: paper models
+        for s in SEEDS:
+            for m in ('gru', 'gcn', 'tgcn'):
+                runs.append((f'main/{m}/seed_{s}', ['--model', m, '--seed', str(s), *base()]))
+    if 'improve' in groups:       # phase 3: improvements (3 seeds for the key pair)
+        for s in SEEDS:
+            runs.append((f'improve/tgcn_res_time/seed_{s}', ['--model', 'tgcn', *RT, '--seed', str(s), *base()]))
+            runs.append((f'improve/gru_res_time/seed_{s}', ['--model', 'gru', *RT, '--seed', str(s), *base()]))
+        if dataset == 'sztaxi':
+            runs.append(('improve/tgcn_res_time_masked/seed_42',
+                         ['--model', 'tgcn', *RT, '--mask-zero', '--seed', '42', *base()]))
+            runs.append(('improve/tgcn_masked/seed_42',
+                         ['--model', 'tgcn', '--mask-zero', '--seed', '42', *base()]))
+    if 'variants' in groups:      # one component at a time (seed 42)
+        one = {'tgcn_res': ['--model', 'tgcn', '--residual'],
+               'tgcn_time': ['--model', 'tgcn', '--time-features'],
+               'tgcn_plus': ['--model', 'tgcn_plus'],
+               'tgcn_res_time_huber': ['--model', 'tgcn', *RT, '--loss', 'huber'],
+               'tgcn_res_time_nograph': ['--model', 'tgcn', *RT, '--no-graph'],
+               'tgcn_selfsep': ['--model', 'tgcn', '--self-sep'],
+               'tgcn_selfsep_res_time': ['--model', 'tgcn', '--self-sep', *RT]}
+        for name, flags in one.items():
+            runs.append((f'variants/{name}/seed_42', [*flags, '--seed', '42', *base()]))
+    if 'tuning' in groups:        # phase 3: input window and hidden units (plain T-GCN)
+        for L in (6, 24):
+            runs.append((f'tuning/tgcn_seq{L}/seed_42', ['--model', 'tgcn', '--seed', '42', *base(L=L)]))
+        for hd in (32, 100):
+            runs.append((f'tuning/tgcn_h{hd}/seed_42', ['--model', 'tgcn', '--seed', '42', *base(hd=hd)]))
+        for L in (6, 24):
+            runs.append((f'tuning/tgcn_res_time_seq{L}/seed_42',
+                         ['--model', 'tgcn', *RT, '--seed', '42', *base(L=L)]))
+    if 'paper' in groups:         # authors' protocol, only to reproduce Table 1
+        hp = {'losloop': ('3', '64'), 'sztaxi': ('1', '100')}.get(dataset, ('3', '16'))
+        for m in ('gru', 'tgcn'):
+            runs.append((f'paper_protocol/{m}/seed_42',
+                         ['--model', m, '--protocol', 'paper', '--seed', '42', '--horizon', hp[0],
+                          '--seq-len', '12', '--hidden-dim', hp[1], '--batch-size', '32']))
+    return runs
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument('--dataset', choices=list(DATASET_DEFAULTS), default='losloop')
+    p.add_argument('--groups', nargs='+', default=['main'],
+                   choices=['main', 'improve', 'variants', 'tuning', 'paper'])
+    p.add_argument('--jobs', type=int, default=4)
+    p.add_argument('--threads', type=int, default=1, help='torch threads per job')
+    p.add_argument('--epochs', type=int, default=120)
+    p.add_argument('--patience', type=int, default=20)
+    p.add_argument('--dry-run', action='store_true')
+    a = p.parse_args()
+    runs = configs(a.dataset, a.groups)
+    todo = [(n, f) for n, f in runs
+            if not (ROOT / 'results' / a.dataset / n / 'metrics.json').is_file()]
+    print(f'{len(runs)} runs, {len(todo)} to do', flush=True)
+    env = dict(os.environ, TGCN_THREADS=str(a.threads))
+    logdir = ROOT / 'results' / a.dataset / 'logs'; logdir.mkdir(parents=True, exist_ok=True)
+
+    def job(item):
+        name, flags = item
+        out = ROOT / 'results' / a.dataset / name
+        cmd = [sys.executable, str(ROOT / 'train.py'), '--dataset', a.dataset,
+               '--epochs', str(a.epochs), '--patience', str(a.patience), '--track-test',
+               '--device', 'cpu', '--result-dir', str(out), *flags]
+        if a.dry_run:
+            print(' '.join(cmd)); return
+        t0 = time.time()
+        log = logdir / (name.replace('/', '__') + '.log')
+        with open(log, 'w') as fh:
+            r = subprocess.run(cmd, cwd=ROOT, env=env, stdout=fh, stderr=subprocess.STDOUT)
+        status = 'OK' if r.returncode == 0 else f'FAILED({r.returncode}) see {log}'
+        print(f'[{time.strftime("%H:%M:%S")}] {name}: {status} in {time.time()-t0:.0f}s', flush=True)
+
+    with ThreadPoolExecutor(a.jobs) as ex:
+        list(ex.map(job, todo))
+
+
+if __name__ == '__main__':
+    main()
