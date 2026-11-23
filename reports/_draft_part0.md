@@ -1,0 +1,18 @@
+# DỰ BÁO TỐC ĐỘ GIAO THÔNG BẰNG GRU VÀ T-GCN: TÁI LẬP, PHẢN BIỆN VÀ CẢI TIẾN
+
+*Bài tập lớn Khai phá dữ liệu — Đề tài: Dự báo tốc độ giao thông dựa trên mô hình GRU và T-GCN (Los-loop, SZ-taxi). Mọi số liệu trong báo cáo được sinh tự động từ thí nghiệm thật trong thư mục `results/` và `reports/tables/`; không có con số nào được ước đoán.*
+
+## Tóm tắt
+
+Chúng tôi cài đặt lại GRU, GCN và T-GCN (Zhao et al., 2019) bằng PyTorch, chạy trên dữ liệu thật Los-loop (207 cảm biến, 7 ngày, 5 phút/mốc) và SZ-taxi (156 tuyến, 31 ngày, 15 phút/mốc) với **cùng dữ liệu, cùng cách chia train/validation/test theo thời gian (70/10/20), 3 seed**, kèm 4 baseline cổ điển (persistence, HA, HA theo giờ, hồi quy tuyến tính). Thực nghiệm đi theo ba giai đoạn của đề tài: (1) GRU và kiểm tra dữ liệu, (2) T-GCN cùng điều kiện, (3) so sánh sai số, phân tích giờ cao điểm và thử cải tiến (cửa sổ đầu vào, số hidden units, đặc trưng thời gian, residual, ...). Kết quả chính trên Los-loop:
+
+1. **GRU tái lập đúng bài báo** (RMSE "15 phút" 5.217 so với 5.218 của bài báo), **T-GCN thì không vượt GRU**: RMSE TB 12 tầm 7.516 ± 0.031 so với 7.495 ± 0.006 (Diebold–Mariano p = 0.76), MAE kém hơn (4.37 so với 4.18). Đồ thị chỉ có lợi ở tầm 45–60 phút, khi tốc độ biến động mạnh và khi dữ liệu nhiễu.
+2. **Cơ chế:** chuẩn hóa D^(-1/2)(A+I)D^(-1/2) chỉ để lại ~30% trọng số cho tín hiệu của chính nút ⇒ T-GCN dự báo tầm ngắn kém cả persistence (5 phút: RMSE 4.84 so với 4.45). Ba bằng chứng độc lập: thí nghiệm liều–đáp ứng với trọng số self-loop, permutation importance, gradient saliency. Khi tách riêng trọng số "bản thân / láng giềng" ([x, Âx]W), T-GCN tốt hơn GRU.
+3. **Phản biện bài báo:** chọn epoch bằng tập test (đo được độ lạc quan 0.5%, tối đa 1.7% — cùng cỡ lợi thế T-GCN báo cáo), "15/30/45/60 phút" là sai số gộp các bước, không có baseline persistence (persistence có MAE "15 phút" 3.16 < 3.18 của T-GCN), không có độ biến thiên, kết luận "tốt nhất trên mọi chỉ số" mâu thuẫn với MAE trong chính Bảng 1.
+4. **Giờ cao điểm là điểm yếu chung:** trong cao điểm và khi kẹt xe, persistence có MAE thấp nhất; mọi mô hình học sâu dự báo lạc quan ~9 mph khi tốc độ ≤ 20 mph; khoảng dự báo conformal 90% chỉ phủ 69–79% trong cao điểm.
+5. **Cải tiến hiệu quả nhất là cách đặt bài toán, không phải đồ thị:** học phần thay đổi (residual) + đặc trưng giờ/thứ + loss theo đơn vị gốc. GRU-RT giảm RMSE 6.9% so với GRU (p < 0.001); ensemble 3 seed đạt "15 phút" 5.09 / 3.01 và "60 phút" 6.91 / 4.01 — tốt hơn mọi con số của bài báo (T-GCN: 5.13 / 3.18 và 7.27 / 4.60) dù dùng giao thức chặt hơn. Siêu tham số (cửa sổ 6–24 bước, hidden 32–100) chỉ thay đổi kết quả ≤ 1.3%.
+6. **Độ tin cậy:** kết quả rất ổn định theo seed (CV ≤ 1%); nhưng mô hình residual rất nhạy với cảm biến hỏng (5% đầu vào = 0 làm RMSE tăng 30–60%) ⇒ cần bước kiểm tra dữ liệu khi triển khai.
+
+SUMMARY_SZ
+
+**Mục lục:** 1. Ý tưởng · 2. Dữ liệu & kiểm tra dữ liệu · 3. Phương pháp · 4. Phản biện bài báo · 5. Kết quả 3 giai đoạn · 6. Mô hình huấn luyện được & cách dùng · 7. Minh chứng – giải thích cơ chế · 8. Độ tin cậy · 9. So sánh với bài báo · 10. SZ-taxi · 11. Hạn chế & hướng phát triển · 12. Kết luận

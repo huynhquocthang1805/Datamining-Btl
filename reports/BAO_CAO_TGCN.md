@@ -1,3 +1,23 @@
+# DỰ BÁO TỐC ĐỘ GIAO THÔNG BẰNG GRU VÀ T-GCN: TÁI LẬP, PHẢN BIỆN VÀ CẢI TIẾN
+
+*Bài tập lớn Khai phá dữ liệu — Đề tài: Dự báo tốc độ giao thông dựa trên mô hình GRU và T-GCN (Los-loop, SZ-taxi). Mọi số liệu trong báo cáo được sinh tự động từ thí nghiệm thật trong thư mục `results/` và `reports/tables/`; không có con số nào được ước đoán.*
+
+## Tóm tắt
+
+Chúng tôi cài đặt lại GRU, GCN và T-GCN (Zhao et al., 2019) bằng PyTorch, chạy trên dữ liệu thật Los-loop (207 cảm biến, 7 ngày, 5 phút/mốc) và SZ-taxi (156 tuyến, 31 ngày, 15 phút/mốc) với **cùng dữ liệu, cùng cách chia train/validation/test theo thời gian (70/10/20), 3 seed**, kèm 4 baseline cổ điển (persistence, HA, HA theo giờ, hồi quy tuyến tính). Thực nghiệm đi theo ba giai đoạn của đề tài: (1) GRU và kiểm tra dữ liệu, (2) T-GCN cùng điều kiện, (3) so sánh sai số, phân tích giờ cao điểm và thử cải tiến (cửa sổ đầu vào, số hidden units, đặc trưng thời gian, residual, ...). Kết quả chính trên Los-loop:
+
+1. **GRU tái lập đúng bài báo** (RMSE "15 phút" 5.217 so với 5.218 của bài báo), **T-GCN thì không vượt GRU**: RMSE TB 12 tầm 7.516 ± 0.031 so với 7.495 ± 0.006 (Diebold–Mariano p = 0.76), MAE kém hơn (4.37 so với 4.18). Đồ thị chỉ có lợi ở tầm 45–60 phút, khi tốc độ biến động mạnh và khi dữ liệu nhiễu.
+2. **Cơ chế:** chuẩn hóa D^(-1/2)(A+I)D^(-1/2) chỉ để lại ~30% trọng số cho tín hiệu của chính nút ⇒ T-GCN dự báo tầm ngắn kém cả persistence (5 phút: RMSE 4.84 so với 4.45). Ba bằng chứng độc lập: thí nghiệm liều–đáp ứng với trọng số self-loop, permutation importance, gradient saliency. Khi tách riêng trọng số "bản thân / láng giềng" ([x, Âx]W), T-GCN tốt hơn GRU.
+3. **Phản biện bài báo:** chọn epoch bằng tập test (đo được độ lạc quan 0.5%, tối đa 1.7% — cùng cỡ lợi thế T-GCN báo cáo), "15/30/45/60 phút" là sai số gộp các bước, không có baseline persistence (persistence có MAE "15 phút" 3.16 < 3.18 của T-GCN), không có độ biến thiên, kết luận "tốt nhất trên mọi chỉ số" mâu thuẫn với MAE trong chính Bảng 1.
+4. **Giờ cao điểm là điểm yếu chung:** trong cao điểm và khi kẹt xe, persistence có MAE thấp nhất; mọi mô hình học sâu dự báo lạc quan ~9 mph khi tốc độ ≤ 20 mph; khoảng dự báo conformal 90% chỉ phủ 69–79% trong cao điểm.
+5. **Cải tiến hiệu quả nhất là cách đặt bài toán, không phải đồ thị:** học phần thay đổi (residual) + đặc trưng giờ/thứ + loss theo đơn vị gốc. GRU-RT giảm RMSE 6.9% so với GRU (p < 0.001); ensemble 3 seed đạt "15 phút" 5.09 / 3.01 và "60 phút" 6.91 / 4.01 — tốt hơn mọi con số của bài báo (T-GCN: 5.13 / 3.18 và 7.27 / 4.60) dù dùng giao thức chặt hơn. Siêu tham số (cửa sổ 6–24 bước, hidden 32–100) chỉ thay đổi kết quả ≤ 1.3%.
+6. **Độ tin cậy:** kết quả rất ổn định theo seed (CV ≤ 1%); nhưng mô hình residual rất nhạy với cảm biến hỏng (5% đầu vào = 0 làm RMSE tăng 30–60%) ⇒ cần bước kiểm tra dữ liệu khi triển khai.
+
+SUMMARY_SZ
+
+**Mục lục:** 1. Ý tưởng · 2. Dữ liệu & kiểm tra dữ liệu · 3. Phương pháp · 4. Phản biện bài báo · 5. Kết quả 3 giai đoạn · 6. Mô hình huấn luyện được & cách dùng · 7. Minh chứng – giải thích cơ chế · 8. Độ tin cậy · 9. So sánh với bài báo · 10. SZ-taxi · 11. Hạn chế & hướng phát triển · 12. Kết luận
+
+
 ## 1. Ý tưởng
 
 **Bài toán.** Cho tốc độ quan sát được tại N cảm biến (Los-loop: 207 vòng từ trên cao tốc Los Angeles, 5 phút/mốc; SZ-taxi: 156 tuyến đường quận La Hồ – Thâm Quyến, 15 phút/mốc) trong L bước gần nhất, dự báo tốc độ của **toàn bộ mạng** trong H bước tiếp theo (15, 30, 45, 60 phút).
@@ -45,7 +65,7 @@ Dữ liệu không có cột thời gian; chúng tôi dựng mốc thời gian t
 ### 2.3 Chất lượng dữ liệu — những điều bài báo không nói
 
 1. **Los-loop chỉ có 7 ngày.** Tập train chứa 5 ngày (trong đó có 2 ngày cuối tuần), tức chỉ khoảng 3 lần quan sát mỗi khung giờ cao điểm ngày thường. Mọi mô hình học "theo giờ" đều có nguy cơ quá khớp.
-2. **Dữ liệu nội suy.** Bài báo cho biết đã nội suy tuyến tính chỗ thiếu. Chúng tôi phát hiện 3.5% điểm nằm trên các đoạn thẳng tuyệt đối (≥ 6 điểm thẳng hàng), trong đó có một sự cố **mất dữ liệu toàn mạng** ngày 05/03 từ 13:30 đến 14:55 (100% cảm biến bị nội suy). Tập test có 4.6% mục tiêu như vậy; dự báo "trơn" sẽ được thưởng một cách giả tạo trên các điểm này (kiểm tra ở mục 7).
+2. **Dữ liệu nội suy.** Bài báo cho biết đã nội suy tuyến tính chỗ thiếu. Chúng tôi phát hiện 3.5% điểm nằm trên các đoạn thẳng tuyệt đối (≥ 6 điểm thẳng hàng), trong đó có một sự cố **mất dữ liệu toàn mạng** ngày 05/03 từ 13:30 đến 14:55 (100% cảm biến bị nội suy). Tập test có 4.6% mục tiêu như vậy; dự báo "trơn" sẽ được thưởng một cách giả tạo trên các điểm này (kiểm tra ở mục 8.5).
 3. **SZ-taxi: số 0 nghĩa là "không có dữ liệu".** 24.8% giá trị bằng 0; tỉ lệ 0 cao nhất lúc 5–7h sáng (khi ít taxi), không phải giờ cao điểm. Đó là thiếu quan sát chứ không phải kẹt xe (Hình 6). Bài báo vẫn huấn luyện và chấm điểm trên các số 0 này. Chúng tôi báo cáo cả hai cách chấm (gồm 0 – để so với bài báo, và bỏ 0 – có ý nghĩa thực tế).
 
 ![Hình 6. SZ-taxi: tỉ lệ giá trị 0 trên mỗi tuyến và theo giờ](figures/eda_sz_zeros.png)
@@ -116,7 +136,7 @@ Không có tập validation. Đây là rò rỉ thông tin từ test vào lựa 
 
 **P2. Chuẩn hóa bằng giá trị lớn nhất của toàn bộ chuỗi** (`max_value = np.max(data1)` trước khi chia train/test) — một thống kê của tập test được dùng khi huấn luyện. Ảnh hưởng nhỏ (Los-loop max = 70 ở cả train lẫn test) nhưng sai về nguyên tắc.
 
-**P3. Cách gộp sai số theo tầm dự báo.** Mã tác giả làm phẳng mọi bước đầu ra (`reshape(test_output, [-1, num_nodes])`) trước khi tính chỉ số, nên "15 phút" trên Los-loop thực chất là **trung bình của 5, 10 và 15 phút**, "60 phút" là trung bình của 12 bước. Con số vì thế dễ hơn sai số thật tại đúng thời điểm 60 phút (Bảng 4 cho thấy chênh lệch có thể tới 25–30%).
+**P3. Cách gộp sai số theo tầm dự báo.** Mã tác giả làm phẳng mọi bước đầu ra (`reshape(test_output, [-1, num_nodes])`) trước khi tính chỉ số, nên "15 phút" trên Los-loop thực chất là **trung bình của 5, 10 và 15 phút**, "60 phút" là trung bình của 12 bước. Con số vì thế dễ hơn sai số thật tại đúng thời điểm 60 phút: với GRU của chúng tôi, RMSE tại đúng bước 60 phút là 9.32 nhưng kiểu gộp của bài báo chỉ 7.50 (thấp hơn 20%).
 
 **P4. Thiếu baseline persistence.** Baseline "giữ nguyên giá trị cuối" (ŷ_{t+k} = x_t) không cần học gì, là thước đo tối thiểu trong dự báo giao thông. Trên Los-loop, dùng **đúng cửa sổ test và cách gộp của tác giả** (80/20, cửa sổ nằm trọn trong 20% cuối), persistence đạt **MAE 3.16 ở "15 phút" — tốt hơn MAE 3.18 của T-GCN** trong bài báo; ở "60 phút" persistence có MAE 4.43 so với 4.60 của T-GCN (RMSE thì T-GCN tốt hơn: 5.13 so với 5.54 và 7.27 so với 8.46). Bài báo kết luận T-GCN vượt HA, ARIMA, SVR nhưng không cho thấy nó vượt được mức tối thiểu này theo MAE.
 
@@ -124,9 +144,24 @@ Không có tập validation. Đây là rò rỉ thông tin từ test vào lựa 
 
 **P6. "Không nhạy với tầm dự báo" là tính chất của dữ liệu, không phải của mô hình.** Trên SZ-taxi, RMSE của T-GCN chỉ tăng từ 3.92 (15 phút) lên 4.01 (60 phút). Nhưng chính trung bình trượt 3 giờ (HA cửa sổ) cũng gần như phẳng (4.16 → 4.31 trong thực nghiệm của chúng tôi): chuỗi SZ-taxi nhiễu và gần như dừng ở độ phân giải 15 phút, nên tầm dự báo ít quan trọng với *mọi* mô hình.
 
-**P7. Một lần chạy, không có độ biến thiên.** Bảng 1 không có độ lệch chuẩn hay kiểm định. Khi chênh lệch giữa GRU và T-GCN chỉ khoảng 1–3%, không thể biết nó có vượt nhiễu do khởi tạo ngẫu nhiên hay không (mục 7).
+**P7. Một lần chạy, không có độ biến thiên.** Bảng 1 không có độ lệch chuẩn hay kiểm định. Khi chênh lệch giữa GRU và T-GCN chỉ khoảng 1–3%, không thể biết nó có vượt nhiễu do khởi tạo ngẫu nhiên hay không (mục 8).
 
 **P8. Dữ liệu.** Los-loop chỉ dài 7 ngày và chứa đoạn nội suy (gồm một lần mất dữ liệu toàn mạng); SZ-taxi có 24.8% giá trị 0 vốn là thiếu quan sát nhưng vẫn được dùng làm mục tiêu (mục 2.3).
+
+### 4.1 Đo trực tiếp độ lạc quan của việc chọn epoch theo test
+
+Mỗi run của chúng tôi ghi lại RMSE test ở *mọi* epoch (chỉ ghi, không dùng để chọn). So sánh RMSE test tại epoch có validation tốt nhất (cách đúng) với RMSE test nhỏ nhất qua mọi epoch (cách của tác giả):
+
+| Mô hình | run | RMSE test – chọn theo val | RMSE test – chọn theo test | độ lạc quan TB | tối đa | epoch (val / test) |
+|---|---|---|---|---|---|---|
+| GCN | 3 | 8.606 | 8.579 | 0.32% | 0.37% | 105 / 73 |
+| GRU | 3 | 7.495 | 7.466 | 0.38% | 0.41% | 94 / 74 |
+| T-GCN | 3 | 7.516 | 7.476 | 0.54% | 0.77% | 80 / 57 |
+| GRU-RT (GRU + residual + thời gian) | 3 | 6.981 | 6.936 | 0.64% | 1.72% | 30 / 20 |
+| T-GCN-RT (residual + thời gian) | 3 | 7.375 | 7.319 | 0.76% | 1.22% | 31 / 36 |
+| T-GCN-RT tách self/láng giềng (T-GCN-RTS) | 1 | 7.172 | 6.974 | 2.76% | 2.76% | 18 / 7 |
+
+Chọn theo test làm sai số đẹp hơn trung bình 0.65% (tối đa 2.76%). Con số nghe nhỏ, nhưng **cùng cỡ với toàn bộ lợi thế mà bài báo báo cáo cho T-GCN so với GRU** trên Los-loop (RMSE "15 phút" 5.13 so với 5.22, tức 1.8%). Mục 9.2 tái lập nguyên vẹn giao thức của tác giả để so sánh trực tiếp.
 
 
 ## 5. Kết quả thực nghiệm trên Los-loop
@@ -202,7 +237,22 @@ TUNING_SECTION
 
 **Từng thành phần một (cùng seed 42, so với T-GCN gốc):**
 
-ABLATION_TABLE
+| Cấu hình (seed 42) | RMSE TB | MAE TB | 15 phút | 60 phút | ΔRMSE vs T-GCN | ΔMAE vs T-GCN | epoch chọn |
+|---|---|---|---|---|---|---|---|
+| GRU (không đồ thị) | 7.488 | 4.169 | 5.99 / 3.35 | 9.31 / 5.38 | +0.1% | -3.9% | 101 |
+| T-GCN (gốc) | 7.482 | 4.336 | 6.15 / 3.65 | 9.07 / 5.35 | +0.0% | +0.0% | 65 |
+| T-GCN, self-loop = 1 (bản cài đặt đầu) | 7.932 | 4.740 | 6.82 / 4.16 | 9.29 / 5.58 | +6.0% | +9.3% | 85 |
+| + thời gian | 7.229 | 4.472 | 6.21 / 3.86 | 8.53 / 5.33 | -3.4% | +3.1% | 25 |
+| + residual | 7.475 | 4.307 | 6.02 / 3.55 | 9.23 / 5.44 | -0.1% | -0.7% | 65 |
+| + tách self/láng giềng | 7.364 | 4.145 | 5.88 / 3.36 | 9.07 / 5.27 | -1.6% | -4.4% | 64 |
+| + residual + thời gian (T-GCN-RT) | 7.350 | 4.324 | 6.13 / 3.61 | 8.83 / 5.35 | -1.8% | -0.3% | 33 |
+| T-GCN-RT bỏ đồ thị (Â = I) | 7.090 | 4.192 | 5.87 / 3.47 | 8.58 / 5.25 | -5.2% | -3.3% | 23 |
+| GRU + residual + thời gian | 7.045 | 4.080 | 5.88 / 3.44 | 8.49 / 5.09 | -5.8% | -5.9% | 33 |
+| T-GCN-RT + tách self/láng giềng | 7.172 | 4.127 | 5.89 / 3.47 | 8.72 / 5.12 | -4.1% | -4.8% | 18 |
+| T-GCN-RT + đồ thị thích nghi (T-GCN+) | 7.369 | 4.308 | 6.07 / 3.63 | 8.88 / 5.31 | -1.5% | -0.6% | 44 |
+| T-GCN-RT + Huber loss | 7.390 | 4.141 | 6.07 / 3.50 | 8.99 / 5.06 | -1.2% | -4.5% | 41 |
+| T-GCN-RT + loss đơn vị gốc | 7.398 | 4.338 | 6.11 / 3.56 | 8.94 / 5.47 | -1.1% | +0.0% | 18 |
+| GRU-RT + loss đơn vị gốc | 6.938 | 4.032 | 5.78 / 3.37 | 8.36 / 5.01 | -7.3% | -7.0% | 35 |
 
 ![Hình 10. Đóng góp của từng thành phần (thay đổi % RMSE/MAE so với T-GCN gốc, TB 12 tầm, seed 42)](figures/ablation_losloop.png)
 

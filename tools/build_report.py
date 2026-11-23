@@ -186,7 +186,28 @@ def predict_example():
     return '```\n' + out.strip() + '\n```'
 
 
-FILL = {'PEAK_TABLE': peak_table, 'ABLATION_TABLE': ablation_table, 'TUNING_TABLE': tuning_table,
+def oracle_table():
+    df = pd.read_csv(TAB / 'oracle_bias_losloop.csv')
+    df['name'] = df.config.str.split('/').str[-1]
+    g = df.groupby('name').agg(n=('seed', 'count'), val=('test_RMSE_val_selected', 'mean'),
+                               test=('test_RMSE_test_selected', 'mean'), bias=('optimistic_bias_%', 'mean'),
+                               bmax=('optimistic_bias_%', 'max'), ev=('best_epoch_val', 'mean'),
+                               eo=('oracle_epoch_test', 'mean')).reset_index()
+    order = ['gcn', 'gru', 'tgcn', 'gru_res_time', 'tgcn_res_time', 'tgcn_selfsep', 'tgcn_selfsep_res_time']
+    g = g[g.name.isin(order)].set_index('name').reindex([o for o in order if o in set(g.name)]).reset_index()
+    t = pd.DataFrame({'Mô hình': g.name.map(label), 'run': g.n,
+                      'RMSE test – chọn theo val': g.val.map(f3), 'RMSE test – chọn theo test': g.test.map(f3),
+                      'độ lạc quan TB': g.bias.map(lambda v: f'{v:.2f}%'), 'tối đa': g.bmax.map(lambda v: f'{v:.2f}%'),
+                      'epoch (val / test)': [f'{a:.0f} / {b:.0f}' for a, b in zip(g.ev, g.eo)]})
+    return md(t)
+
+
+def oracle_stats():
+    df = pd.read_csv(TAB / 'oracle_bias_losloop.csv')
+    return df['optimistic_bias_%'].mean(), df['optimistic_bias_%'].max()
+
+
+FILL = {'ORACLE_TABLE': oracle_table,'PEAK_TABLE': peak_table, 'ABLATION_TABLE': ablation_table, 'TUNING_TABLE': tuning_table,
         'MAIN_TABLE': main_table, 'FI_TABLE': fi_table, 'SEED_TABLE': seed_table,
         'PAIRWISE_TABLE': pairwise_table, 'CONFORMAL_TABLE': conformal_table, 'PAPER_TABLE': paper_table,
         'MODEL_CARD_TABLE': model_card, 'PREDICT_EXAMPLE': predict_example,
@@ -201,7 +222,12 @@ def main():
                 text = re.sub(rf'^{key}$', lambda _: fn(), text, flags=re.M)
             except FileNotFoundError as e:
                 print('missing table for', key, e)
-    left = sorted(set(re.findall(r'^[A-Z_]{6,}$', text, flags=re.M)))
+    try:
+        mean_b, max_b = oracle_stats()
+        text = text.replace('ORACLE_MEAN%', f'{mean_b:.2f}%').replace('ORACLE_MAX%', f'{max_b:.2f}%')
+    except FileNotFoundError:
+        pass
+    left = sorted(set(re.findall(r'^[A-Z_]{6,}$', text, flags=re.M)) | set(re.findall(r'[A-Z]{4,}_[A-Z_]{3,}', text)))
     if left:
         print('UNFILLED placeholders:', left)
     (REP / 'BAO_CAO_TGCN.md').write_text(text, encoding='utf-8')
