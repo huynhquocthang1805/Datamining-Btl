@@ -64,6 +64,20 @@ def run_dirs(dataset):
     return out
 
 
+def val_rmse(run_dir, epoch=None):
+    """Validation RMSE in original units at the selected (best-validation) epoch.
+    Comparable across loss functions -> used to choose between configurations."""
+    h = Path(run_dir) / 'history.csv'
+    if not h.is_file():
+        return float('nan')
+    df = pd.read_csv(h)
+    if 'val_rmse_raw' not in df:
+        return float('nan')
+    if epoch is None:
+        epoch = int(df.epoch[df.val_mse_scaled.idxmin()])
+    return float(df.loc[df.epoch == epoch, 'val_rmse_raw'].iloc[0])
+
+
 def load_pred(run_dir):
     z = np.load(Path(run_dir) / 'test_predictions.npz')
     return z['y_true'], z['y_pred'], z['time_indices']

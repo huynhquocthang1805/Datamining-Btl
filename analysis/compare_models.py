@@ -8,7 +8,7 @@ from collections import defaultdict
 import numpy as np
 import pandas as pd
 from common import (ROOT, FIG, TAB, PAPER, REPORT_MIN, run_dirs, load_pred, bundle_for,
-                    steps_for_minutes, fmt, df_to_markdown)
+                    steps_for_minutes, fmt, df_to_markdown, val_rmse)
 from tgcn.metrics import horizon_metrics, metrics
 from tgcn import plotstyle as ps
 import matplotlib.pyplot as plt
@@ -88,6 +88,10 @@ def table_main(by, interval, dataset, view):
         get = lambda m: m['masked_nonzero'] if view == 'masked' and 'masked_nonzero' in m else m
         ms = [get(r['metrics']) for r in rs]
         row = {'model': name, 'n_seeds': len(ms)}
+        vr = np.array([val_rmse(r['dir'], r['metrics'].get('best_epoch')) if r.get('dir') else np.nan
+                       for r in rs], float)
+        row['VAL_RMSE (chọn mô hình)'] = fmt(np.nanmean(vr), np.nanstd(vr, ddof=1) if np.isfinite(vr).sum() > 1 else None) \
+            if np.isfinite(vr).any() else '—'
         for key in ('RMSE', 'MAE', 'MAPE_percent'):
             v = np.array([m['overall'][key] for m in ms], float)
             row[f'overall_{key}'] = fmt(v.mean(), v.std(ddof=1) if len(v) > 1 else None)
