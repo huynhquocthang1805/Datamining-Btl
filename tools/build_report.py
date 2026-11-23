@@ -212,9 +212,11 @@ def paper_protocol_table():
     rows = []
     for _, r in df.iterrows():
         mins = '15 phút'
-        if r.model == 'naive':
-            rows.append({'Bộ dữ liệu': r.dataset, 'Mô hình': label('naive'), 'epoch train': '—',
-                         'Chúng tôi (RMSE / MAE)': f'{r.RMSE:.3f} / {r.MAE:.3f}', 'Bài báo (RMSE / MAE)': '— (không báo cáo)',
+        if r.model in ('naive', 'ha_window'):
+            rows.append({'Bộ dữ liệu': r.dataset, 'Mô hình': label(r.model), 'epoch train': '—',
+                         'Chúng tôi (RMSE / MAE)': f'{r.RMSE:.3f} / {r.MAE:.3f}',
+                         'Bài báo (RMSE / MAE)': '— (không báo cáo)' if r.model == 'naive'
+                         else f'{r.paper_RMSE:.3f} / {r.paper_MAE:.3f}',
                          'Accuracy / R² (chúng tôi | bài báo)': '—'})
             continue
         rows.append({'Bộ dữ liệu': r.dataset, 'Mô hình': label(r.model), 'epoch train': f'{int(r.epochs)} (tốt nhất: {int(r.best_epoch)})',

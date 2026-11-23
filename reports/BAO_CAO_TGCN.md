@@ -144,6 +144,8 @@ Không có tập validation. Đây là rò rỉ thông tin từ test vào lựa 
 
 **P6. "Không nhạy với tầm dự báo" là tính chất của dữ liệu, không phải của mô hình.** Trên SZ-taxi, RMSE của T-GCN chỉ tăng từ 3.92 (15 phút) lên 4.01 (60 phút). Nhưng chính trung bình trượt 3 giờ (HA cửa sổ) cũng gần như phẳng (4.16 → 4.31 trong thực nghiệm của chúng tôi): chuỗi SZ-taxi nhiễu và gần như dừng ở độ phân giải 15 phút, nên tầm dự báo ít quan trọng với *mọi* mô hình.
 
+**P6b. Baseline HA trên SZ-taxi yếu bất thường.** Trên đúng các cửa sổ test của tác giả, trung bình 12 bước đầu vào (định nghĩa HA mà con số Los-loop của bài báo khớp: 7.48 / 3.97 so với 7.44 / 4.01) cho SZ-taxi **RMSE 4.17 / MAE 2.74**, trong khi bài báo ghi HA = 7.92 / 5.50. Với baseline đúng, khoảng cách "T-GCN tốt hơn HA 50.6%" biến mất: MAE của T-GCN (2.71) chỉ hơn trung bình trượt 3 giờ khoảng 1%, MAE của GRU (2.68) khoảng 2%.
+
 **P7. Một lần chạy, không có độ biến thiên.** Bảng 1 không có độ lệch chuẩn hay kiểm định. Khi chênh lệch giữa GRU và T-GCN chỉ khoảng 1–3%, không thể biết nó có vượt nhiễu do khởi tạo ngẫu nhiên hay không (mục 8).
 
 **P8. Dữ liệu.** Los-loop chỉ dài 7 ngày và chứa đoạn nội suy (gồm một lần mất dữ liệu toàn mạng); SZ-taxi có 24.8% giá trị 0 vốn là thiếu quan sát nhưng vẫn được dùng làm mục tiêu (mục 2.3).
@@ -515,8 +517,12 @@ Chúng tôi chạy lại GRU và T-GCN theo **đúng giao thức trong mã của
 | Bộ dữ liệu | Mô hình | epoch train | Chúng tôi (RMSE / MAE) | Bài báo (RMSE / MAE) | Accuracy / R² (chúng tôi | bài báo) |
 |---|---|---|---|---|---|
 | losloop | Naive (giữ giá trị cuối) | — | 5.543 / 3.156 | — (không báo cáo) | — |
+| losloop | HA (TB cửa sổ) | — | 7.475 / 3.972 | 7.443 / 4.014 | — |
+| losloop | GRU | 300 (tốt nhất: 297) | 5.233 / 2.974 | 5.218 / 3.060 | 0.911 / 0.857 | 0.911 / 0.858 |
 | losloop | T-GCN | 300 (tốt nhất: 297) | 5.356 / 3.247 | 5.126 / 3.180 | 0.909 / 0.851 | 0.913 / 0.863 |
 | sztaxi | Naive (giữ giá trị cuối) | — | 5.260 / 3.317 | — (không báo cáo) | — |
+| sztaxi | HA (TB cửa sổ) | — | 4.174 / 2.739 | 7.920 / 5.497 | — |
+| sztaxi | GRU | 150 (tốt nhất: 150) | 4.104 / 2.741 | 4.048 / 2.681 | 0.714 / 0.846 | 0.718 / 0.850 |
 | sztaxi | T-GCN | 150 (tốt nhất: 150) | 4.404 / 3.074 | 3.916 / 2.706 | 0.693 / 0.822 | 0.731 / 0.854 |
 
 ![Hình 19. RMSE test theo epoch dưới giao thức của tác giả; đường chấm: con số trong bài báo; đường gạch: persistence trên đúng các cửa sổ test đó](figures/paper_protocol_curves.png)
@@ -525,7 +531,7 @@ Nhận xét:
 
 - **GRU tái lập được bài báo ngay cả với ít epoch** (bão hòa sớm). **T-GCN hội tụ rất chậm** dưới chuẩn hóa max và lr cố định: Los-loop 6.01 (epoch 100) → 5.52 (200) → 5.36 (300), vẫn đang giảm; với 3000 epoch có thể tiến tới con số 5.13 của bài báo. Chúng tôi không ngoại suy; điều chắc chắn là ở cùng ngân sách huấn luyện, T-GCN chưa vượt GRU.
 - **Ngay cả dưới giao thức của tác giả, MAE của T-GCN (3.25) vẫn kém persistence (3.16)** trên đúng các cửa sổ test đó — điểm P4 không phụ thuộc vào cách chúng tôi huấn luyện.
-- Trên SZ-taxi, T-GCN sau 150 epoch (RMSE 4.40) còn kém trung bình trượt 3 giờ (4.16) — với chuỗi nhiễu như SZ-taxi, phần lớn "kỹ năng" mà bài báo báo cáo có thể đạt bằng một trung bình trượt.
+- Trên SZ-taxi, GRU tái lập sát bài báo (4.10 / 2.74 so với 4.05 / 2.68) ngay từ những epoch đầu, còn T-GCN sau 150 epoch (4.40, epoch tốt nhất là epoch cuối) vẫn kém trung bình trượt 3 giờ trên cùng cửa sổ (4.17 / 2.74). Với chuỗi nhiễu như SZ-taxi, gần như toàn bộ "kỹ năng" mà bài báo báo cáo đạt được bằng một trung bình trượt (P6b).
 - Giao thức nghiêm ngặt của chúng tôi (z-score theo train, lr cosine, dừng sớm bằng validation) cho T-GCN hội tụ trong ~100 epoch; đây là lý do chúng tôi dùng nó cho mọi so sánh chính.
 
 ### 9.3 Tóm tắt các giả thuyết

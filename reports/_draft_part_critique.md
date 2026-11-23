@@ -19,6 +19,8 @@ Không có tập validation. Đây là rò rỉ thông tin từ test vào lựa 
 
 **P6. "Không nhạy với tầm dự báo" là tính chất của dữ liệu, không phải của mô hình.** Trên SZ-taxi, RMSE của T-GCN chỉ tăng từ 3.92 (15 phút) lên 4.01 (60 phút). Nhưng chính trung bình trượt 3 giờ (HA cửa sổ) cũng gần như phẳng (4.16 → 4.31 trong thực nghiệm của chúng tôi): chuỗi SZ-taxi nhiễu và gần như dừng ở độ phân giải 15 phút, nên tầm dự báo ít quan trọng với *mọi* mô hình.
 
+**P6b. Baseline HA trên SZ-taxi yếu bất thường.** Trên đúng các cửa sổ test của tác giả, trung bình 12 bước đầu vào (định nghĩa HA mà con số Los-loop của bài báo khớp: 7.48 / 3.97 so với 7.44 / 4.01) cho SZ-taxi **RMSE 4.17 / MAE 2.74**, trong khi bài báo ghi HA = 7.92 / 5.50. Với baseline đúng, khoảng cách "T-GCN tốt hơn HA 50.6%" biến mất: MAE của T-GCN (2.71) chỉ hơn trung bình trượt 3 giờ khoảng 1%, MAE của GRU (2.68) khoảng 2%.
+
 **P7. Một lần chạy, không có độ biến thiên.** Bảng 1 không có độ lệch chuẩn hay kiểm định. Khi chênh lệch giữa GRU và T-GCN chỉ khoảng 1–3%, không thể biết nó có vượt nhiễu do khởi tạo ngẫu nhiên hay không (mục 8).
 
 **P8. Dữ liệu.** Los-loop chỉ dài 7 ngày và chứa đoạn nội suy (gồm một lần mất dữ liệu toàn mạng); SZ-taxi có 24.8% giá trị 0 vốn là thiếu quan sát nhưng vẫn được dùng làm mục tiêu (mục 2.3).
