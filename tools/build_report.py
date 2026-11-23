@@ -35,7 +35,7 @@ def f3(x):
 
 def peak_table():
     df = pd.read_csv(TAB / 'peak_subsets_losloop.csv')
-    order = ['naive', 'linear', 'gru', 'gcn', 'tgcn', 'gru_res_time', 'tgcn_res_time']
+    order = ['naive', 'linear', 'gru', 'gcn', 'tgcn', 'tgcn_selfsep', 'gru_res_time', 'tgcn_res_time']
     cols = ['tất cả', 'ngoài cao điểm', 'cao điểm', 'thông thoáng', 'kẹt xe (v<40)', 'biến động mạnh (Δ>10)']
     rows = []
     for m in order:
@@ -226,7 +226,25 @@ def paper_protocol_table():
     return md(pd.DataFrame(rows))
 
 
-FILL = {'ORACLE_TABLE': oracle_table, 'PAPER_PROTOCOL_TABLE': paper_protocol_table,'PEAK_TABLE': peak_table, 'ABLATION_TABLE': ablation_table, 'TUNING_TABLE': tuning_table,
+def final_table():
+    df = pd.read_csv(TAB / 'main_results_losloop.csv').set_index('model')
+    cand = ['gru', 'tgcn', 'tgcn_selfsep', 'gru_res_time', 'tgcn_res_time', 'tgcn_selfsep_res_time',
+            'gru_res_time_rawloss']
+    rows = []
+    for m in cand:
+        if m not in df.index: continue
+        r = df.loc[m]
+        rows.append({'Cấu hình (3 seed)': label(m), 'RMSE validation ↓ (tiêu chí chọn)': r['VAL_RMSE (chọn mô hình)'],
+                     'RMSE test': r.overall_RMSE, 'MAE test': r.overall_MAE})
+    for m in ('ensemble_gru_res_time', 'ensemble_tgcn_selfsep', 'ensemble_mix'):
+        if m in df.index:
+            r = df.loc[m]
+            rows.append({'Cấu hình (3 seed)': label(m) if m != 'ensemble_tgcn_selfsep' else 'Ensemble T-GCN tách self (3 seed)',
+                         'RMSE validation ↓ (tiêu chí chọn)': '—', 'RMSE test': r.overall_RMSE, 'MAE test': r.overall_MAE})
+    return md(pd.DataFrame(rows))
+
+
+FILL = {'FINAL_TABLE': final_table, 'ORACLE_TABLE': oracle_table, 'PAPER_PROTOCOL_TABLE': paper_protocol_table,'PEAK_TABLE': peak_table, 'ABLATION_TABLE': ablation_table, 'TUNING_TABLE': tuning_table,
         'MAIN_TABLE': main_table, 'FI_TABLE': fi_table, 'SEED_TABLE': seed_table,
         'PAIRWISE_TABLE': pairwise_table, 'CONFORMAL_TABLE': conformal_table, 'PAPER_TABLE': paper_table,
         'MODEL_CARD_TABLE': model_card, 'PREDICT_EXAMPLE': predict_example,

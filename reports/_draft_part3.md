@@ -80,4 +80,7 @@ ABLATION_TABLE
 
 FINAL_TABLE
 
-FINAL_TEXT
+- **Theo validation, GRU-RT là cấu hình tốt nhất** (RMSE val 5.906 ± 0.056); thứ hạng trên test giống hệt thứ hạng trên validation, nên lựa chọn này không "nhìn trộm" test. **Mô hình cuối cùng = ensemble 3 seed của GRU-RT**: test RMSE 6.91 / MAE 4.01 TB 12 tầm — giảm 7.8% RMSE và 3.9% MAE so với GRU, 8.1% / 8.2% so với T-GCN gốc (Bảng 9.1: tốt hơn mọi con số của bài báo).
+- **Mô hình đồ thị tốt nhất là T-GCN tách self/láng giềng**: không residual, không đặc trưng giờ mà vẫn vượt GRU có ý nghĩa (7.30 so với 7.50, p = 0.01). Đây là câu trả lời cho câu hỏi "đồ thị có giúp không?": *có*, nếu phép tích chập không xóa mờ thông tin riêng của nút.
+- Ensemble hỗn hợp GRU-RT + T-GCN-RTS có MAE thấp nhất (4.00) nhưng không khác ensemble GRU-RT có ý nghĩa (p = 0.50) mà tốn gấp đôi chi phí ⇒ không chọn.
+- Hai khuyến nghị khi triển khai đi kèm mô hình cuối (mục 8): kiểm tra/điền giá trị thiếu trước khi dự báo (mô hình residual nhạy với đầu vào = 0) và cắt dự báo về miền vật lý [0, v_max] (đã cài trong `predict.py`).

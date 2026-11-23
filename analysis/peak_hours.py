@@ -11,7 +11,7 @@ from common import FIG, TAB, run_dirs, load_pred, bundle_for, df_to_markdown
 from tgcn import plotstyle as ps
 import matplotlib.pyplot as plt
 
-MODELS = ['naive', 'linear', 'gru', 'gcn', 'tgcn', 'gru_res_time', 'tgcn_res_time']
+MODELS = ['naive', 'linear', 'gru', 'gcn', 'tgcn', 'tgcn_selfsep', 'gru_res_time', 'tgcn_res_time']
 CONGESTED = {'losloop': 40.0, 'sztaxi': 10.0}   # speed threshold (dataset unit)
 
 

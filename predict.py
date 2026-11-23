@@ -11,9 +11,9 @@ What a checkpoint (best.pt) contains
 
 Usage
     # forecast after the last row of the CSV
-    python predict.py --checkpoint models/losloop_tgcn_res_time.pt --input data/losloop/speed.csv
-    # forecast from a given moment (uses the 12 rows that end at that moment)
-    python predict.py --checkpoint models/losloop_tgcn_res_time.pt \\
+    python predict.py --checkpoint models/losloop_gru_res_time_seed42.pt --input data/losloop/speed.csv
+    # final model = ensemble of 3 seeds, forecast from a given moment, compare with truth
+    python predict.py --checkpoint models/losloop_gru_res_time_seed*.pt \\
         --input data/losloop/speed.csv --end-time "2012-03-07 07:30" --compare
 """
 import argparse
@@ -75,7 +75,8 @@ class Forecaster:
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('--checkpoint', required=True)
+    p.add_argument('--checkpoint', required=True, nargs='+',
+                   help='one checkpoint, or several (same dataset) to average = ensemble')
     p.add_argument('--input', required=True, help='speed CSV: header = sensor ids, one row per step')
     p.add_argument('--start-time', default=None, help='timestamp of the first CSV row')
     p.add_argument('--end-time', default=None, help='last observed moment (default: last row)')
@@ -83,7 +84,10 @@ def main():
     p.add_argument('--compare', action='store_true', help='print actual values if they exist in the CSV')
     p.add_argument('--sensors', type=int, default=5, help='how many sensors to print')
     a = p.parse_args()
-    f = Forecaster(a.checkpoint)
+    members = [Forecaster(c) for c in a.checkpoint]
+    f = members[0]
+    if any(m.seq_len != f.seq_len or m.horizon != f.horizon or m.sensor_ids != f.sensor_ids for m in members):
+        raise SystemExit('Ensemble members must share sensors, seq_len and horizon.')
     df = pd.read_csv(a.input)
     df.columns = [str(c) for c in df.columns]
     if list(df.columns) != f.sensor_ids:
@@ -93,13 +97,15 @@ def main():
     if end < f.seq_len - 1:
         raise SystemExit('Not enough history before --end-time.')
     win = df.iloc[end - f.seq_len + 1:end + 1].to_numpy(np.float32)
-    fc = f.predict(win, times[end - f.seq_len + 1:end + 1])
+    fc = np.mean([m.predict(win, times[end - f.seq_len + 1:end + 1]) for m in members], axis=0)
+    fc = np.clip(fc, 0.0, None)          # speeds cannot be negative (T-GCN can output < 0)
     target_times = pd.date_range(times[end] + pd.Timedelta(minutes=f.interval), periods=f.horizon,
                                  freq=f'{f.interval}min')
     out = pd.DataFrame(fc, index=target_times, columns=f.sensor_ids)
     out.index.name = 'target_time'
-    print(f"Model {f.cfg['model']} (residual={f.cfg.get('residual')}, time_features={f.cfg.get('time_features')}) "
-          f"| {f.n_parameters()} parameters | best epoch {f.best_epoch}")
+    print(f"Model {f.cfg['model']} (residual={f.cfg.get('residual')}, time_features={f.cfg.get('time_features')}, "
+          f"self_sep={f.cfg.get('self_sep', False)}) | {f.n_parameters()} parameters"
+          + (f' | ensemble of {len(members)} checkpoints' if len(members) > 1 else f' | best epoch {f.best_epoch}'))
     print(f'Input: {f.seq_len} steps ending {times[end]}; forecast {f.horizon} steps x {f.interval} min')
     show = out.iloc[:, :a.sensors].round(1)
     if a.compare and end + f.horizon < len(df):

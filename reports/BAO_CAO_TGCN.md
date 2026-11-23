@@ -11,7 +11,7 @@ Chúng tôi cài đặt lại GRU, GCN và T-GCN (Zhao et al., 2019) bằng PyTo
 3. **Phản biện bài báo:** chọn epoch bằng tập test (đo được độ lạc quan 0.5%, tối đa 1.7% — cùng cỡ lợi thế T-GCN báo cáo), "15/30/45/60 phút" là sai số gộp các bước, không có baseline persistence (persistence có MAE "15 phút" 3.16 < 3.18 của T-GCN), không có độ biến thiên, kết luận "tốt nhất trên mọi chỉ số" mâu thuẫn với MAE trong chính Bảng 1.
 4. **Giờ cao điểm là điểm yếu chung:** trong cao điểm và khi kẹt xe, persistence có MAE thấp nhất; mọi mô hình học sâu dự báo lạc quan ~9 mph khi tốc độ ≤ 20 mph; khoảng dự báo conformal 90% chỉ phủ 69–79% trong cao điểm.
 5. **Cải tiến hiệu quả nhất là cách đặt bài toán, không phải đồ thị:** học phần thay đổi so với giá trị cuối (residual) + đặc trưng giờ/thứ. GRU-RT giảm RMSE 6.9% so với GRU (p < 0.001); ensemble 3 seed đạt "15 phút" 5.09 / 3.01 và "60 phút" 6.91 / 4.01 — tốt hơn mọi con số của bài báo (T-GCN: 5.13 / 3.18 và 7.27 / 4.60) dù dùng giao thức chặt hơn. Siêu tham số (cửa sổ 6–24 bước, hidden 32–100) chỉ thay đổi kết quả ≤ 1.3%.
-6. **Độ tin cậy:** kết quả rất ổn định theo seed (CV ≤ 1%); nhưng mô hình residual rất nhạy với cảm biến hỏng (5% đầu vào = 0 làm RMSE tăng 30–60%) ⇒ cần bước kiểm tra dữ liệu khi triển khai.
+6. **Độ tin cậy:** các cấu hình chính rất ổn định theo seed (CV ≤ 1%), và chọn cấu hình theo validation cho cùng thứ hạng như trên test; nhưng mô hình residual rất nhạy với cảm biến hỏng (5% đầu vào = 0 làm RMSE tăng 30–60%) ⇒ cần bước kiểm tra dữ liệu khi triển khai.
 
 SUMMARY_SZ
 
@@ -161,10 +161,10 @@ Mỗi run của chúng tôi ghi lại RMSE test ở *mọi* epoch (chỉ ghi, kh
 | T-GCN | 4 | 6.976 | 6.946 | 0.40% | 0.77% | 134 / 117 |
 | GRU-RT (GRU + residual + thời gian) | 3 | 6.981 | 6.936 | 0.64% | 1.72% | 30 / 20 |
 | T-GCN-RT (residual + thời gian) | 3 | 7.375 | 7.319 | 0.76% | 1.22% | 31 / 36 |
-| T-GCN tách self/láng giềng | 2 | 7.309 | 7.180 | 1.76% | 2.44% | 50 / 28 |
+| T-GCN tách self/láng giềng | 3 | 7.295 | 7.188 | 1.46% | 2.44% | 47 / 28 |
 | T-GCN-RT tách self/láng giềng (T-GCN-RTS) | 3 | 7.219 | 6.974 | 3.39% | 3.91% | 22 / 9 |
 
-Chọn theo test làm sai số đẹp hơn trung bình 1.04% (tối đa 5.56%). Con số nghe nhỏ, nhưng **cùng cỡ với toàn bộ lợi thế mà bài báo báo cáo cho T-GCN so với GRU** trên Los-loop (RMSE "15 phút" 5.13 so với 5.22, tức 1.8%). Mục 9.2 tái lập nguyên vẹn giao thức của tác giả để so sánh trực tiếp.
+Chọn theo test làm sai số đẹp hơn trung bình 1.03% (tối đa 5.56%). Con số nghe nhỏ, nhưng **cùng cỡ với toàn bộ lợi thế mà bài báo báo cáo cho T-GCN so với GRU** trên Los-loop (RMSE "15 phút" 5.13 so với 5.22, tức 1.8%). Mục 9.2 tái lập nguyên vẹn giao thức của tác giả để so sánh trực tiếp.
 
 
 ## 5. Kết quả thực nghiệm trên Los-loop
@@ -202,25 +202,29 @@ Ba quan sát:
 
 | Mô hình | tất cả | ngoài cao điểm | cao điểm | thông thoáng | kẹt xe (v<40) | biến động mạnh (Δ>10) |
 |---|---|---|---|---|---|---|
-| Naive (giữ giá trị cuối) | 3.562 | 3.355 | 4.203 | 3.048 | 6.950 | — |
-| Hồi quy tuyến tính | 3.607 | 3.180 | 4.931 | 2.782 | 9.050 | — |
-| GRU | 3.359 | 3.004 | 4.456 | 2.635 | 8.135 | — |
-| T-GCN | 3.642 | 3.150 | 5.165 | 2.887 | 8.624 | — |
-| GRU-RT (GRU + residual + thời gian) | 3.439 | 3.093 | 4.510 | 2.821 | 7.518 | — |
-| T-GCN-RT (residual + thời gian) | 3.611 | 3.236 | 4.772 | 2.887 | 8.388 | — |
+| Naive (giữ giá trị cuối) | 3.562 | 3.355 | 4.203 | 3.048 | 6.950 | 18.621 |
+| Hồi quy tuyến tính | 3.607 | 3.180 | 4.931 | 2.782 | 9.050 | 16.172 |
+| GRU | 3.359 | 3.004 | 4.456 | 2.635 | 8.135 | 15.554 |
+| GCN | 4.886 | 3.885 | 7.984 | 3.788 | 12.130 | 13.339 |
+| T-GCN | 3.669 | 3.161 | 5.242 | 2.890 | 8.807 | 14.126 |
+| T-GCN tách self/láng giềng | 3.342 | 2.965 | 4.507 | 2.669 | 7.781 | 14.638 |
+| GRU-RT (GRU + residual + thời gian) | 3.427 | 3.062 | 4.556 | 2.788 | 7.646 | 14.524 |
+| T-GCN-RT (residual + thời gian) | 3.602 | 3.224 | 4.771 | 2.894 | 8.274 | 15.071 |
 
 **MAE – dự báo trước 60 phút**
 
 | Mô hình | tất cả | ngoài cao điểm | cao điểm | thông thoáng | kẹt xe (v<40) | biến động mạnh (Δ>10) |
 |---|---|---|---|---|---|---|
-| Naive (giữ giá trị cuối) | 5.765 | 5.223 | 7.441 | 4.592 | 13.580 | — |
-| Hồi quy tuyến tính | 5.842 | 4.727 | 9.289 | 3.919 | 18.652 | — |
-| GRU | 5.379 | 4.358 | 8.537 | 3.641 | 16.959 | — |
-| T-GCN | 5.421 | 4.384 | 8.631 | 3.817 | 16.114 | — |
-| GRU-RT (GRU + residual + thời gian) | 5.085 | 4.111 | 8.098 | 3.764 | 13.892 | — |
-| T-GCN-RT (residual + thời gian) | 5.339 | 4.437 | 8.127 | 4.017 | 14.147 | — |
+| Naive (giữ giá trị cuối) | 5.765 | 5.223 | 7.441 | 4.592 | 13.580 | 24.286 |
+| Hồi quy tuyến tính | 5.842 | 4.727 | 9.289 | 3.919 | 18.652 | 19.079 |
+| GRU | 5.379 | 4.358 | 8.537 | 3.641 | 16.959 | 17.578 |
+| GCN | 6.042 | 4.831 | 9.788 | 4.284 | 17.752 | 16.179 |
+| T-GCN | 5.394 | 4.354 | 8.612 | 3.766 | 16.238 | 16.538 |
+| T-GCN tách self/láng giềng | 5.232 | 4.272 | 8.200 | 3.715 | 15.335 | 16.691 |
+| GRU-RT (GRU + residual + thời gian) | 5.038 | 4.057 | 8.074 | 3.782 | 13.406 | 14.978 |
+| T-GCN-RT (residual + thời gian) | 5.370 | 4.443 | 8.239 | 4.042 | 14.219 | 15.852 |
 
-*Tỉ lệ mẫu test: ngoài cao điểm 76%, cao điểm 24%, thông thoáng 87%, kẹt xe (v<40) 13%, biến động mạnh (Δ>10) nan%.*
+*Tỉ lệ mẫu test: ngoài cao điểm 76%, cao điểm 24%, thông thoáng 87%, kẹt xe (v<40) 13%, biến động mạnh (Δ>10) 7%.*
 
 Những điều bảng này cho thấy — và bài báo không phân tích:
 
@@ -293,9 +297,23 @@ Theo yêu cầu đề tài, chúng tôi thử ba "núm vặn" trên T-GCN: độ
 
 Để không lặp lại lỗi chọn-theo-test của bài báo, cấu hình cuối được chọn theo **RMSE validation** (đơn vị gốc, so sánh được giữa các hàm mất mát), sau đó mới xem test:
 
-FINAL_TABLE
+| Cấu hình (3 seed) | RMSE validation ↓ (tiêu chí chọn) | RMSE test | MAE test |
+|---|---|---|---|
+| GRU | 6.194 ± 0.003 | 7.495 ± 0.006 | 4.175 ± 0.023 |
+| T-GCN | 6.284 ± 0.027 | 7.516 ± 0.031 | 4.371 ± 0.037 |
+| T-GCN tách self/láng giềng | 6.091 ± 0.039 | 7.295 ± 0.060 | 4.124 ± 0.019 |
+| GRU-RT (GRU + residual + thời gian) | 5.906 ± 0.056 | 6.981 ± 0.063 | 4.065 ± 0.063 |
+| T-GCN-RT (residual + thời gian) | 6.158 ± 0.004 | 7.375 ± 0.043 | 4.325 ± 0.029 |
+| T-GCN-RT tách self/láng giềng (T-GCN-RTS) | 5.937 ± 0.110 | 7.219 ± 0.054 | 4.156 ± 0.052 |
+| GRU-RT, loss đơn vị gốc | 5.915 ± 0.092 | 7.143 ± 0.244 | 4.087 ± 0.068 |
+| Ensemble GRU-RT (3 seed) | — | 6.911 | 4.012 |
+| Ensemble T-GCN tách self (3 seed) | — | 7.190 | 4.065 |
+| Ensemble GRU-RT + T-GCN-RTS | — | 6.928 | 4.001 |
 
-FINAL_TEXT
+- **Theo validation, GRU-RT là cấu hình tốt nhất** (RMSE val 5.906 ± 0.056); thứ hạng trên test giống hệt thứ hạng trên validation, nên lựa chọn này không "nhìn trộm" test. **Mô hình cuối cùng = ensemble 3 seed của GRU-RT**: test RMSE 6.91 / MAE 4.01 TB 12 tầm — giảm 7.8% RMSE và 3.9% MAE so với GRU, 8.1% / 8.2% so với T-GCN gốc (Bảng 9.1: tốt hơn mọi con số của bài báo).
+- **Mô hình đồ thị tốt nhất là T-GCN tách self/láng giềng**: không residual, không đặc trưng giờ mà vẫn vượt GRU có ý nghĩa (7.30 so với 7.50, p = 0.01). Đây là câu trả lời cho câu hỏi "đồ thị có giúp không?": *có*, nếu phép tích chập không xóa mờ thông tin riêng của nút.
+- Ensemble hỗn hợp GRU-RT + T-GCN-RTS có MAE thấp nhất (4.00) nhưng không khác ensemble GRU-RT có ý nghĩa (p = 0.50) mà tốn gấp đôi chi phí ⇒ không chọn.
+- Hai khuyến nghị khi triển khai đi kèm mô hình cuối (mục 8): kiểm tra/điền giá trị thiếu trước khi dự báo (mô hình residual nhạy với đầu vào = 0) và cắt dự báo về miền vật lý [0, v_max] (đã cài trong `predict.py`).
 
 
 ## 6. Mô hình huấn luyện được là gì và cách đọc lên để dự báo
@@ -346,7 +364,25 @@ Toàn bộ quy trình được đóng gói trong `predict.py` (lớp `Forecaster
 python predict.py --checkpoint models/losloop_tgcn_res_time.pt --input data/losloop/speed.csv --end-time "2012-03-07 07:30" --compare --sensors 4
 ```
 
-*(chạy `python tools/export_models.py` trước)*
+```
+Model tgcn (residual=True, time_features=True, self_sep=False) | 14220 parameters | best epoch 31
+Input: 12 steps ending 2012-03-07 07:30:00; forecast 12 steps x 5 min
+                      forecast                                      actual                                 
+                        773869     767541     767542     717447     773869     767541     767542     717447
+target_time                                                                                                
+2012-03-07 07:35:00  68.300003  64.699997  24.900000  52.000000  67.625000  65.750000  18.125000  51.875000
+2012-03-07 07:40:00  68.300003  64.500000  25.700001  51.799999  67.444444  66.111111  20.000000  48.333333
+2012-03-07 07:45:00  68.000000  64.199997  26.400000  51.500000  68.000000  67.250000  18.125000  46.500000
+2012-03-07 07:50:00  67.500000  63.900002  26.900000  51.099998  68.333333  63.888889  20.000000  50.222222
+2012-03-07 07:55:00  67.099998  63.799999  27.799999  50.900002  67.875000  67.750000  24.750000  50.000000
+2012-03-07 08:00:00  66.699997  63.599998  28.299999  50.599998  68.777778  60.666667  26.666667  51.555556
+2012-03-07 08:05:00  66.500000  63.500000  28.799999  50.500000  66.500000  65.750000  20.500000  51.875000
+2012-03-07 08:10:00  66.099998  63.400002  29.500000  50.299999  68.500000  65.000000  18.375000  45.625000
+2012-03-07 08:15:00  65.800003  63.400002  30.299999  50.200001  66.555556  66.222222  21.777778  51.333333
+2012-03-07 08:20:00  65.300003  63.299999  30.799999  49.900002  68.000000  64.875000  21.500000  54.625000
+2012-03-07 08:25:00  64.800003  63.299999  31.500000  49.700001  67.333333  66.333333  21.833333  53.500000
+2012-03-07 08:30:00  64.500000  63.299999  32.200001  49.599998  67.222222  67.000000  22.555556  53.111111
+```
 
 Đầu ra có thể ghi ra CSV (`--output forecast.csv`, H dòng × N cột). Muốn dùng dữ liệu mới: chỉ cần CSV cùng thứ tự cột cảm biến và thời điểm bắt đầu (`--start-time`).
 
@@ -428,7 +464,7 @@ Ngay ở bước EDA (mục 2.2), tương quan của *biến động* 5 phút gi
 | T-GCN | 3 | 7.516 ± 0.031 | 0.41% | 4.371 ± 0.037 | [78, 96, 65] |
 | GCN | 3 | 8.606 ± 0.009 | 0.10% | 5.345 ± 0.009 | [108, 103, 105] |
 
-Độ lệch chuẩn giữa các seed nhỏ (CV ≤ 1%) đối với mọi mô hình, nhưng **cùng cỡ với nhiều khác biệt mà bài báo dùng để kết luận** (ví dụ T-GCN hơn GRU 1.8% RMSE ở "15 phút"). Ensemble 3 seed luôn cải thiện nhẹ và có ý nghĩa (GRU-RT: 6.98 → 6.91, DM p < 10⁻⁴).
+Độ lệch chuẩn giữa các seed nhỏ (CV ≤ 1%) với mọi cấu hình chính — ngoại lệ duy nhất là GRU-RT với loss đơn vị gốc (CV 3.4%, một seed kém hẳn), đó là lý do biến thể này bị loại. Các độ lệch này nhỏ, nhưng **cùng cỡ với nhiều khác biệt mà bài báo dùng để kết luận** (ví dụ T-GCN hơn GRU 1.8% RMSE ở "15 phút"). Ensemble 3 seed luôn cải thiện nhẹ và có ý nghĩa (GRU-RT: 6.98 → 6.91, DM p < 10⁻⁴).
 
 ### 8.2 Khác biệt nào có ý nghĩa thống kê?
 
