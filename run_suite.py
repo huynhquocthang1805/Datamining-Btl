@@ -50,13 +50,13 @@ def configs(dataset, groups):
             runs.append(('improve/tgcn_masked/seed_42',
                          ['--model', 'tgcn', '--mask-zero', '--seed', '42', *base()]))
     if 'variants' in groups:      # one component at a time (seed 42)
-        one = {'tgcn_res': ['--model', 'tgcn', '--residual'],
+        one = {'tgcn_selfsep_res_time': ['--model', 'tgcn', '--self-sep', *RT],
+               'tgcn_selfsep': ['--model', 'tgcn', '--self-sep'],
+               'tgcn_res': ['--model', 'tgcn', '--residual'],
                'tgcn_time': ['--model', 'tgcn', '--time-features'],
                'tgcn_plus': ['--model', 'tgcn_plus'],
                'tgcn_res_time_huber': ['--model', 'tgcn', *RT, '--loss', 'huber'],
-               'tgcn_res_time_nograph': ['--model', 'tgcn', *RT, '--no-graph'],
-               'tgcn_selfsep': ['--model', 'tgcn', '--self-sep'],
-               'tgcn_selfsep_res_time': ['--model', 'tgcn', '--self-sep', *RT]}
+               'tgcn_res_time_nograph': ['--model', 'tgcn', *RT, '--no-graph']}
         for name, flags in one.items():
             runs.append((f'variants/{name}/seed_42', [*flags, '--seed', '42', *base()]))
     if 'tuning' in groups:        # phase 3: input window and hidden units (plain T-GCN)
@@ -82,6 +82,8 @@ def configs(dataset, groups):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument('--dataset', choices=list(DATASET_DEFAULTS), default='losloop')
+    p.add_argument('--spec', nargs='+', default=None,
+                   help='dataset:group pairs sharing one job pool, e.g. losloop:paper sztaxi:main')
     p.add_argument('--groups', nargs='+', default=['main'],
                    choices=['main', 'improve', 'variants', 'tuning', 'paper'])
     p.add_argument('--jobs', type=int, default=4)
@@ -90,17 +92,18 @@ def main():
     p.add_argument('--patience', type=int, default=20)
     p.add_argument('--dry-run', action='store_true')
     a = p.parse_args()
-    runs = configs(a.dataset, a.groups)
-    todo = [(n, f) for n, f in runs
-            if not (ROOT / 'results' / a.dataset / n / 'metrics.json').is_file()]
+    spec = [tuple(x.split(':')) for x in a.spec] if a.spec else [(a.dataset, g) for g in a.groups]
+    runs = [(ds, n, f) for ds, g in spec for n, f in configs(ds, [g])]
+    todo = [(ds, n, f) for ds, n, f in runs
+            if not (ROOT / 'results' / ds / n / 'metrics.json').is_file()]
     print(f'{len(runs)} runs, {len(todo)} to do', flush=True)
     env = dict(os.environ, TGCN_THREADS=str(a.threads))
-    logdir = ROOT / 'results' / a.dataset / 'logs'; logdir.mkdir(parents=True, exist_ok=True)
 
     def job(item):
-        name, flags = item
-        out = ROOT / 'results' / a.dataset / name
-        cmd = [sys.executable, str(ROOT / 'train.py'), '--dataset', a.dataset,
+        ds, name, flags = item
+        logdir = ROOT / 'results' / ds / 'logs'; logdir.mkdir(parents=True, exist_ok=True)
+        out = ROOT / 'results' / ds / name
+        cmd = [sys.executable, str(ROOT / 'train.py'), '--dataset', ds,
                '--epochs', str(a.epochs), '--patience', str(a.patience), '--track-test',
                '--device', 'cpu', '--result-dir', str(out), *flags]
         if a.dry_run:
@@ -110,7 +113,7 @@ def main():
         with open(log, 'w') as fh:
             r = subprocess.run(cmd, cwd=ROOT, env=env, stdout=fh, stderr=subprocess.STDOUT)
         status = 'OK' if r.returncode == 0 else f'FAILED({r.returncode}) see {log}'
-        print(f'[{time.strftime("%H:%M:%S")}] {name}: {status} in {time.time()-t0:.0f}s', flush=True)
+        print(f'[{time.strftime("%H:%M:%S")}] {ds}/{name}: {status} in {time.time()-t0:.0f}s', flush=True)
 
     with ThreadPoolExecutor(a.jobs) as ex:
         list(ex.map(job, todo))
