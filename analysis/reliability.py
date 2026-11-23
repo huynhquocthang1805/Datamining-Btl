@@ -260,7 +260,8 @@ def main():
     block = 12 if ds == 'losloop' else 4
     pairs = [('tgcn', 'gru'), ('tgcn', 'naive'), ('gru', 'naive'), ('tgcn', 'linear'),
              ('tgcn_res_time', 'tgcn'), ('tgcn_res_time', 'naive'), ('tgcn_res_time', 'gru_res_time'),
-             ('tgcn_res_time', 'linear'), ('ensemble_tgcn_res_time', 'tgcn_res_time')]
+             ('tgcn_res_time', 'linear'), ('gru_res_time', 'gru'), ('gru_res_time', 'naive'),
+             ('ensemble_tgcn_res_time', 'tgcn_res_time'), ('ensemble_gru_res_time', 'gru_res_time')]
     pw = pairwise(by, pairs, block, mask_zero); pw.to_csv(TAB / f'rel_pairwise_{ds}.csv', index=False)
     print(pw.round(4).to_string())
     if ds == 'losloop':

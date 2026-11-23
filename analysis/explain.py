@@ -32,7 +32,8 @@ ROLE = {
 def by_name(ds):
     by = defaultdict(list)
     for r in run_dirs(ds):
-        by[r['name']].append(r)
+        if r['group'] in ('baselines', 'main', 'improve', 'variants'):
+            by[r['name']].append(r)
     return by
 
 

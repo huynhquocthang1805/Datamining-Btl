@@ -15,7 +15,10 @@ import matplotlib.pyplot as plt
 
 ORDER = ['naive', 'ha_window', 'ha_tod', 'linear', 'gcn', 'gru', 'tgcn', 'tgcn_time', 'tgcn_res',
          'gru_res_time', 'tgcn_res_time', 'tgcn_res_time_nograph', 'tgcn_plus', 'tgcn_res_time_huber',
-         'tgcn_masked', 'tgcn_res_time_masked', 'ensemble_tgcn_res_time']
+         'tgcn_selfsep', 'tgcn_selfsep_res_time', 'tgcn_selfloop1',
+         'tgcn_masked', 'tgcn_res_time_masked',
+         'ensemble_gru', 'ensemble_tgcn', 'ensemble_gru_res_time', 'ensemble_tgcn_res_time']
+ENSEMBLE_OF = ['gru', 'tgcn', 'gru_res_time', 'tgcn_res_time']
 
 
 def key_of(r):
@@ -26,7 +29,7 @@ def collect(dataset, use_masked=False):
     runs = run_dirs(dataset)
     by = defaultdict(list)
     for r in runs:
-        if r['group'] == 'tuning':
+        if r['group'] in ('tuning', 'ensemble', 'paper_protocol', 'logs'):
             continue
         by[key_of(r)].append(r)
     return runs, by
@@ -45,6 +48,9 @@ def ensemble(by, name, dataset, interval):
     out.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(out / 'test_predictions.npz', y_true=yt, y_pred=yp.astype(np.float32),
                         time_indices=preds[0][2])
+    from tgcn.utility import save_json
+    save_json({**sc, 'dataset': dataset, 'model': f'ensemble_{name}', 'seed': 0, 'caution': '',
+               'members': [str(r['dir']) for r in rs]}, out / 'metrics.json')
     return sc
 
 
@@ -107,7 +113,8 @@ def plot_horizon(by, interval, dataset, view, names):
 def table_paper(by, dataset, interval):
     """Paper-style (cumulative 1..k steps) metrics next to the paper's Table 1."""
     rows = []
-    names = ['ha_window', 'linear', 'gcn', 'gru', 'tgcn', 'naive', 'tgcn_res_time', 'ensemble_tgcn_res_time']
+    names = ['ha_window', 'linear', 'gcn', 'gru', 'tgcn', 'naive', 'gru_res_time', 'tgcn_res_time',
+             'ensemble_gru_res_time', 'ensemble_tgcn_res_time']
     for name in names:
         rs = by.get(name)
         for mn in REPORT_MIN:
@@ -147,9 +154,10 @@ def main():
     a = p.parse_args(); ds = a.dataset
     interval = 5 if ds == 'losloop' else 15
     runs, by = collect(ds)
-    ens = ensemble(by, 'tgcn_res_time', ds, interval)
-    if ens is not None:
-        by['ensemble_tgcn_res_time'] = [{'metrics': ens, 'seed': 0, 'summary': {}, 'dir': None}]
+    for name in ENSEMBLE_OF:
+        ens = ensemble(by, name, ds, interval)
+        if ens is not None:
+            by[f'ensemble_{name}'] = [{'metrics': ens, 'seed': 0, 'summary': {}, 'dir': None}]
     views = ['all'] + (['masked'] if ds == 'sztaxi' else [])
     md = []
     for view in views:
