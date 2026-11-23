@@ -176,10 +176,10 @@ def model_card():
 
 
 def predict_example():
-    ck = ROOT / 'models' / 'losloop_tgcn_res_time.pt'
-    if not ck.is_file():
+    cks = sorted((ROOT / 'models').glob('losloop_gru_res_time_seed*.pt'))
+    if not cks:
         return '*(chạy `python tools/export_models.py` trước)*'
-    out = subprocess.run([sys.executable, str(ROOT / 'predict.py'), '--checkpoint', str(ck), '--input',
+    out = subprocess.run([sys.executable, str(ROOT / 'predict.py'), '--checkpoint', *map(str, cks), '--input',
                           str(ROOT / 'data/losloop/speed.csv'), '--end-time', '2012-03-07 07:30', '--compare',
                           '--sensors', '4'], capture_output=True, text=True, cwd=ROOT,
                          env={**__import__('os').environ, 'TGCN_THREADS': '1'}).stdout

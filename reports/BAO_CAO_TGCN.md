@@ -347,42 +347,48 @@ Tổng số tham số học được: **14,220**.
 
 ### 6.2 Quy trình dự báo khi "đọc" mô hình lên
 
+Thư mục `models/` chứa: `losloop_gru.pt`, `losloop_tgcn.pt`, `losloop_tgcn_selfsep.pt`, `losloop_tgcn_res_time.pt` (mô hình so sánh — seed có loss validation nhỏ nhất) và **`losloop_gru_res_time_seed{42,123,2026}.pt` — mô hình cuối cùng, dùng chung như một ensemble**. `models/index.json` ghi nguồn gốc và sai số test của từng tệp.
+
 ```
-1. Đọc checkpoint         ck = torch.load('models/losloop_tgcn_res_time.pt')
+1. Đọc checkpoint         ck = torch.load('models/losloop_gru_res_time_seed42.pt')
 2. Dựng lại kiến trúc     model = build_model(Namespace(**ck['config']), Â)   # từ data_stats
 3. Nạp trọng số           model.load_state_dict(ck['state_dict']); model.eval()
 4. Lấy 12 mốc gần nhất    X_raw: [12, 207]  (tốc độ thô, mph)
 5. Chuẩn hóa              X = (X_raw − mean_train) / std_train
 6. Đặc trưng thời gian    sin/cos(giờ), sin/cos(thứ) của 12 mốc đó
 7. Chạy mô hình           ŷ = model(X, time) → [12, 207]   (12 bước × 207 cảm biến)
+                          (residual: ŷ = x_t + Δ̂ được cộng sẵn bên trong mô hình)
 8. Đổi về đơn vị gốc      Ŷ = ŷ · std_train + mean_train
+9. Ensemble + hậu xử lý   trung bình Ŷ của 3 checkpoint, cắt về Ŷ ≥ 0
 ```
 
-Toàn bộ quy trình được đóng gói trong `predict.py` (lớp `Forecaster`). Ví dụ dự báo lúc 07:30 sáng thứ Tư 07/03/2012 (giờ cao điểm, nằm trong tập test) và đối chiếu với thực tế:
+Toàn bộ quy trình được đóng gói trong `predict.py` (lớp `Forecaster`; truyền nhiều `--checkpoint` để ensemble). Ví dụ dự báo lúc 07:30 sáng thứ Tư 07/03/2012 (giờ cao điểm, nằm trong tập test) bằng mô hình cuối và đối chiếu với thực tế:
 
 ```bash
-python predict.py --checkpoint models/losloop_tgcn_res_time.pt --input data/losloop/speed.csv --end-time "2012-03-07 07:30" --compare --sensors 4
+python predict.py --checkpoint models/losloop_gru_res_time_seed*.pt --input data/losloop/speed.csv --end-time "2012-03-07 07:30" --compare --sensors 4
 ```
 
 ```
-Model tgcn (residual=True, time_features=True, self_sep=False) | 14220 parameters | best epoch 31
+Model gru (residual=True, time_features=True, self_sep=False) | 14412 parameters | ensemble of 3 checkpoints
 Input: 12 steps ending 2012-03-07 07:30:00; forecast 12 steps x 5 min
                       forecast                                      actual                                 
                         773869     767541     767542     717447     773869     767541     767542     717447
 target_time                                                                                                
-2012-03-07 07:35:00  68.300003  64.699997  24.900000  52.000000  67.625000  65.750000  18.125000  51.875000
-2012-03-07 07:40:00  68.300003  64.500000  25.700001  51.799999  67.444444  66.111111  20.000000  48.333333
-2012-03-07 07:45:00  68.000000  64.199997  26.400000  51.500000  68.000000  67.250000  18.125000  46.500000
-2012-03-07 07:50:00  67.500000  63.900002  26.900000  51.099998  68.333333  63.888889  20.000000  50.222222
-2012-03-07 07:55:00  67.099998  63.799999  27.799999  50.900002  67.875000  67.750000  24.750000  50.000000
-2012-03-07 08:00:00  66.699997  63.599998  28.299999  50.599998  68.777778  60.666667  26.666667  51.555556
-2012-03-07 08:05:00  66.500000  63.500000  28.799999  50.500000  66.500000  65.750000  20.500000  51.875000
-2012-03-07 08:10:00  66.099998  63.400002  29.500000  50.299999  68.500000  65.000000  18.375000  45.625000
-2012-03-07 08:15:00  65.800003  63.400002  30.299999  50.200001  66.555556  66.222222  21.777778  51.333333
-2012-03-07 08:20:00  65.300003  63.299999  30.799999  49.900002  68.000000  64.875000  21.500000  54.625000
-2012-03-07 08:25:00  64.800003  63.299999  31.500000  49.700001  67.333333  66.333333  21.833333  53.500000
-2012-03-07 08:30:00  64.500000  63.299999  32.200001  49.599998  67.222222  67.000000  22.555556  53.111111
+2012-03-07 07:35:00  66.599998  64.900002  24.900000  51.200001  67.625000  65.750000  18.125000  51.875000
+2012-03-07 07:40:00  66.199997  64.800003  26.200001  50.900002  67.444444  66.111111  20.000000  48.333333
+2012-03-07 07:45:00  65.699997  64.599998  27.700001  50.500000  68.000000  67.250000  18.125000  46.500000
+2012-03-07 07:50:00  65.300003  64.400002  28.900000  50.200001  68.333333  63.888889  20.000000  50.222222
+2012-03-07 07:55:00  64.800003  64.300003  30.000000  49.900002  67.875000  67.750000  24.750000  50.000000
+2012-03-07 08:00:00  64.300003  64.099998  31.200001  49.599998  68.777778  60.666667  26.666667  51.555556
+2012-03-07 08:05:00  63.799999  64.000000  32.500000  49.400002  66.500000  65.750000  20.500000  51.875000
+2012-03-07 08:10:00  63.299999  63.900002  33.700001  49.099998  68.500000  65.000000  18.375000  45.625000
+2012-03-07 08:15:00  62.900002  63.799999  35.000000  48.900002  66.555556  66.222222  21.777778  51.333333
+2012-03-07 08:20:00  62.400002  63.700001  36.299999  48.599998  68.000000  64.875000  21.500000  54.625000
+2012-03-07 08:25:00  62.000000  63.599998  37.200001  48.500000  67.333333  66.333333  21.833333  53.500000
+2012-03-07 08:30:00  61.299999  63.500000  38.500000  48.200001  67.222222  67.000000  22.555556  53.111111
 ```
+
+Ba cảm biến thông thoáng (773869, 767541, 717447) được dự báo sát, sai số vài mph. Cảm biến 767542 đang kẹt (~18–20 mph): mô hình dự báo tốc độ **hồi phục dần lên ~38 mph sau 1 giờ** trong khi thực tế vẫn kẹt — đúng thiên lệch "lạc quan khi kẹt xe" đã đo ở mục 8.5. Đây là cách đọc kết quả đúng: con số dự báo là kỳ vọng có điều kiện, nên trong tình huống bất định (kẹt sẽ tan hay không) nó nằm giữa hai kịch bản.
 
 Đầu ra có thể ghi ra CSV (`--output forecast.csv`, H dòng × N cột). Muốn dùng dữ liệu mới: chỉ cần CSV cùng thứ tự cột cảm biến và thời điểm bắt đầu (`--start-time`).
 
