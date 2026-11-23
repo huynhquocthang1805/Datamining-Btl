@@ -17,8 +17,33 @@ ORDER = ['naive', 'ha_window', 'ha_tod', 'linear', 'gcn', 'gru', 'tgcn', 'tgcn_t
          'gru_res_time', 'tgcn_res_time', 'tgcn_res_time_nograph', 'tgcn_plus', 'tgcn_res_time_huber',
          'tgcn_selfsep', 'tgcn_selfsep_res_time', 'tgcn_selfloop1',
          'tgcn_masked', 'tgcn_res_time_masked',
-         'ensemble_gru', 'ensemble_tgcn', 'ensemble_gru_res_time', 'ensemble_tgcn_res_time']
-ENSEMBLE_OF = ['gru', 'tgcn', 'gru_res_time', 'tgcn_res_time']
+         'ensemble_gru', 'ensemble_tgcn', 'ensemble_gru_res_time', 'ensemble_tgcn_res_time',
+         'ensemble_tgcn_selfsep_res_time', 'ensemble_mix']
+ENSEMBLE_OF = ['gru', 'tgcn', 'gru_res_time', 'tgcn_res_time', 'tgcn_selfsep_res_time']
+# heterogeneous ensemble: temporal-only + spatio-temporal family, equal weight per family
+MIX = ['gru_res_time', 'tgcn_selfsep_res_time']
+
+
+def mix_ensemble(by, dataset, interval):
+    fams = [by.get(n, []) for n in MIX]
+    if any(len(f) < 1 for f in fams):
+        return None
+    fam_preds = []
+    for f in fams:
+        ps_ = [load_pred(r['dir']) for r in f]
+        fam_preds.append(np.mean([q[1] for q in ps_], axis=0))
+    yt, _, t = load_pred(fams[0][0]['dir'])
+    yp = np.mean(fam_preds, axis=0)
+    sc = horizon_metrics(yt, yp, interval)
+    if (yt == 0).any():
+        sc['masked_nonzero'] = horizon_metrics(yt, yp, interval, mask_zero=True)
+    out = ROOT / 'results' / dataset / 'ensemble' / 'mix'
+    out.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(out / 'test_predictions.npz', y_true=yt, y_pred=yp.astype(np.float32), time_indices=t)
+    from tgcn.utility import save_json
+    save_json({**sc, 'dataset': dataset, 'model': 'ensemble_mix', 'seed': 0, 'caution': '',
+               'members': [str(r['dir']) for f in fams for r in f]}, out / 'metrics.json')
+    return sc
 
 
 def key_of(r):
@@ -114,7 +139,7 @@ def table_paper(by, dataset, interval):
     """Paper-style (cumulative 1..k steps) metrics next to the paper's Table 1."""
     rows = []
     names = ['ha_window', 'linear', 'gcn', 'gru', 'tgcn', 'naive', 'gru_res_time', 'tgcn_res_time',
-             'ensemble_gru_res_time', 'ensemble_tgcn_res_time']
+             'ensemble_gru_res_time', 'ensemble_tgcn_res_time', 'ensemble_mix']
     for name in names:
         rs = by.get(name)
         for mn in REPORT_MIN:
@@ -158,6 +183,9 @@ def main():
         ens = ensemble(by, name, ds, interval)
         if ens is not None:
             by[f'ensemble_{name}'] = [{'metrics': ens, 'seed': 0, 'summary': {}, 'dir': None}]
+    mx = mix_ensemble(by, ds, interval)
+    if mx is not None:
+        by['ensemble_mix'] = [{'metrics': mx, 'seed': 0, 'summary': {}, 'dir': None}]
     views = ['all'] + (['masked'] if ds == 'sztaxi' else [])
     md = []
     for view in views:

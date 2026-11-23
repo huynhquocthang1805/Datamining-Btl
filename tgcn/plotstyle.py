@@ -22,7 +22,9 @@ MODEL_COLORS = {
     'gru': '#2a78d6', 'gcn': '#1baf7a', 'tgcn': '#eb6834',
     'tgcn_res': '#e87ba4', 'tgcn_time': '#008300', 'tgcn_res_time': '#6250d6',
     'gru_res_time': '#86b6ef', 'tgcn_plus': '#e34948', 'tgcn_res_time_huber': '#9085e9',
-    'ensemble': '#0d366b',
+    'ensemble': '#0d366b', 'ensemble_mix': '#0d366b', 'ensemble_gru_res_time': '#184f95',
+    'tgcn_selfsep_res_time': '#1c5cab', 'tgcn_selfsep': '#9ec5f4', 'tgcn_selfloop1': '#d6d5cf',
+    'gru_res_time_rawloss': '#86b6ef', 'tgcn_res_time_rawloss': '#9085e9',
 }
 MODEL_LABELS = {
     'naive': 'Naive (giữ giá trị cuối)', 'ha_window': 'HA (TB cửa sổ)', 'ha_tod': 'HA theo giờ',
@@ -32,6 +34,11 @@ MODEL_LABELS = {
     'tgcn_plus': 'T-GCN+ (RT + đồ thị thích nghi)', 'tgcn_res_time_huber': 'T-GCN-RT + Huber',
     'tgcn_res_time_masked': 'T-GCN-RT (loss bỏ qua 0)', 'tgcn_masked': 'T-GCN (loss bỏ qua 0)',
     'ensemble': 'Ensemble T-GCN-RT (3 seed)',
+    'tgcn_selfsep': 'T-GCN tách self/láng giềng', 'tgcn_selfsep_res_time': 'T-GCN-RT tách self/láng giềng (T-GCN-RTS)',
+    'tgcn_selfloop1': 'T-GCN (self-loop = 1)', 'ensemble_mix': 'Ensemble GRU-RT + T-GCN-RTS',
+    'ensemble_gru_res_time': 'Ensemble GRU-RT (3 seed)', 'ensemble_tgcn_res_time': 'Ensemble T-GCN-RT (3 seed)',
+    'gru_res_time_rawloss': 'GRU-RT, loss đơn vị gốc', 'tgcn_res_time_rawloss': 'T-GCN-RT, loss đơn vị gốc',
+    'gru_res_time': 'GRU-RT (GRU + residual + thời gian)',
 }
 BLUES = LinearSegmentedColormap.from_list(
     'blues', ['#cde2fb', '#86b6ef', '#3987e5', '#256abf', '#184f95', '#0d366b'])
