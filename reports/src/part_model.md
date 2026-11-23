@@ -2,7 +2,7 @@
 
 ### 6.1 "Mô hình" thực chất là gì
 
-Sau huấn luyện, mô hình là **một tệp checkpoint** (`best.pt`, ≈ 60–70 KB) — chính là trạng thái ở epoch có MSE validation nhỏ nhất. Tệp này là một `dict` PyTorch gồm:
+Sau huấn luyện, mô hình là **một tệp checkpoint** (`best.pt`, 0.1–0.4 MB, phần lớn là ma trận kề 207 × 207 được lưu kèm; bản thân trọng số chỉ ≈ 60 KB) — chính là trạng thái ở epoch có MSE validation nhỏ nhất. Tệp này là một `dict` PyTorch gồm:
 
 | Khóa | Nội dung |
 |---|---|
