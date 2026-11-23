@@ -194,8 +194,8 @@ def oracle_table():
                                test=('test_RMSE_test_selected', 'mean'), bias=('optimistic_bias_%', 'mean'),
                                bmax=('optimistic_bias_%', 'max'), ev=('best_epoch_val', 'mean'),
                                eo=('oracle_epoch_test', 'mean')).reset_index()
-    order = ['gcn', 'gru', 'tgcn', 'gru_res_time', 'tgcn_res_time', 'tgcn_selfsep', 'tgcn_selfsep_res_time']
-    g = g[g.name.isin(order)].set_index('name').reindex([o for o in order if o in set(g.name)]).reset_index()
+    g = g[~g.name.str.startswith('tgcn_seq') & ~g.name.str.startswith('tgcn_h') &
+          ~g.name.str.startswith('tgcn_res_time_seq')].sort_values('bias').reset_index(drop=True)
     t = pd.DataFrame({'Mô hình': g.name.map(label), 'run': g.n,
                       'RMSE test – chọn theo val': g.val.map(f3), 'RMSE test – chọn theo test': g.test.map(f3),
                       'độ lạc quan TB': g.bias.map(lambda v: f'{v:.2f}%'), 'tối đa': g.bmax.map(lambda v: f'{v:.2f}%'),

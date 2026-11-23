@@ -169,7 +169,7 @@ def oracle_bias(runs):
     rows = []
     for r in runs:
         s = r['summary']
-        if 'oracle_test_rmse' not in s: continue
+        if 'oracle_test_rmse' not in s or r['group'] in ('paper_protocol', 'ensemble'): continue
         rows.append({'config': f"{r['group']}/{r['name']}", 'seed': r['seed'],
                      'best_epoch_val': s['best_epoch'], 'oracle_epoch_test': s['oracle_epoch_min_test_rmse'],
                      'test_RMSE_val_selected': r['metrics']['overall']['RMSE'],

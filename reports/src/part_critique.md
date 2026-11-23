@@ -31,4 +31,4 @@ Mỗi run của chúng tôi ghi lại RMSE test ở *mọi* epoch (chỉ ghi, kh
 
 ORACLE_TABLE
 
-Chọn theo test làm sai số đẹp hơn trung bình ORACLE_MEAN% (tối đa ORACLE_MAX%). Con số nghe nhỏ, nhưng **cùng cỡ với toàn bộ lợi thế mà bài báo báo cáo cho T-GCN so với GRU** trên Los-loop (RMSE "15 phút" 5.13 so với 5.22, tức 1.8%). Mục 9.2 tái lập nguyên vẹn giao thức của tác giả để so sánh trực tiếp.
+Chọn theo test làm sai số đẹp hơn trung bình ORACLE_MEAN% (tối đa ORACLE_MAX%) trên toàn bộ các run. Độ lạc quan **tăng theo mức dễ quá khớp**: 0.3–0.5% với GCN/GRU/T-GCN (đường học mượt), nhưng 2–5.6% với các mô hình nhiều tham số hoặc dừng sớm (tách self + RT, loss đơn vị gốc, Huber, đồ thị thích nghi) — đường sai số test của chúng dao động mạnh nên "chọn đỉnh đẹp nhất" được lợi nhiều hơn. Con số nghe nhỏ, nhưng **cùng cỡ với toàn bộ lợi thế mà bài báo báo cáo cho T-GCN so với GRU** trên Los-loop (RMSE "15 phút" 5.13 so với 5.22, tức 1.8%). Mục 9.2 tái lập nguyên vẹn giao thức của tác giả để so sánh trực tiếp.

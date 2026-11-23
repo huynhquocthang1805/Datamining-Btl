@@ -39,6 +39,7 @@ MODEL_LABELS = {
     'ensemble_gru_res_time': 'Ensemble GRU-RT (3 seed)', 'ensemble_tgcn_res_time': 'Ensemble T-GCN-RT (3 seed)',
     'gru_res_time_rawloss': 'GRU-RT, loss đơn vị gốc', 'tgcn_res_time_rawloss': 'T-GCN-RT, loss đơn vị gốc',
     'gru_res_time': 'GRU-RT (GRU + residual + thời gian)',
+    'tgcn_res_time_nograph': 'T-GCN-RT bỏ đồ thị (Â = I)',
 }
 BLUES = LinearSegmentedColormap.from_list(
     'blues', ['#cde2fb', '#86b6ef', '#3987e5', '#256abf', '#184f95', '#0d366b'])

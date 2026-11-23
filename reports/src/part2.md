@@ -2,7 +2,7 @@
 
 ### 3.1 Các mô hình
 
-Ký hiệu: x_t ∈ R^N là tốc độ (đã chuẩn hóa z-score theo từng cảm biến, thống kê **chỉ lấy từ train**) tại bước t; A là ma trận kề; Â = D̃^(-1/2)(A + I)D̃^(-1/2) là ma trận kề chuẩn hóa đối xứng (SZ-taxi có hướng được đối xứng hóa A ← max(A, Aᵀ)).
+Ký hiệu: x_t ∈ R^N là tốc độ (đã chuẩn hóa z-score theo từng cảm biến, thống kê **chỉ lấy từ train**) tại bước t; A là ma trận kề; Â = D̃^(-1/2)(A + I)D̃^(-1/2) là ma trận kề chuẩn hóa đối xứng (đúng như mã tác giả: A + I với A gốc — Los-loop đã có đường chéo 1 nên self-loop thực tế là 2; SZ-taxi có hướng được giữ nguyên hướng, Â = D^(-1/2)(A+I)ᵀD^(-1/2)).
 
 | Mô hình | Mô tả | Thông tin dùng |
 |---|---|---|
