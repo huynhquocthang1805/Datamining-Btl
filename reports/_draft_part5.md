@@ -4,7 +4,7 @@
 
 SEED_TABLE
 
-Độ lệch chuẩn giữa các seed nhỏ (CV ≤ 1%) đối với mọi mô hình, nhưng **cùng cỡ với nhiều khác biệt mà bài báo dùng để kết luận** (ví dụ T-GCN hơn GRU 1.8% RMSE ở "15 phút"). Ensemble 3 seed luôn cải thiện nhẹ và có ý nghĩa (GRU-RT: 6.98 → 6.91, DM p < 10⁻⁴).
+Độ lệch chuẩn giữa các seed nhỏ (CV ≤ 1%) với mọi cấu hình chính — ngoại lệ duy nhất là GRU-RT với loss đơn vị gốc (CV 3.4%, một seed kém hẳn), đó là lý do biến thể này bị loại. Các độ lệch này nhỏ, nhưng **cùng cỡ với nhiều khác biệt mà bài báo dùng để kết luận** (ví dụ T-GCN hơn GRU 1.8% RMSE ở "15 phút"). Ensemble 3 seed luôn cải thiện nhẹ và có ý nghĩa (GRU-RT: 6.98 → 6.91, DM p < 10⁻⁴).
 
 ### 8.2 Khác biệt nào có ý nghĩa thống kê?
 
