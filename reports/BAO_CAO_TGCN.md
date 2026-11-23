@@ -13,7 +13,7 @@ Chúng tôi cài đặt lại GRU, GCN và T-GCN (Zhao et al., 2019) bằng PyTo
 5. **Cải tiến hiệu quả nhất là cách đặt bài toán, không phải đồ thị:** học phần thay đổi so với giá trị cuối (residual) + đặc trưng giờ/thứ. GRU-RT giảm RMSE 6.9% so với GRU (p < 0.001); ensemble 3 seed đạt "15 phút" 5.09 / 3.01 và "60 phút" 6.91 / 4.01 — tốt hơn mọi con số của bài báo (T-GCN: 5.13 / 3.18 và 7.27 / 4.60) dù dùng giao thức chặt hơn. Siêu tham số (cửa sổ 6–24 bước, hidden 32–100) chỉ thay đổi kết quả ≤ 1.3%.
 6. **Độ tin cậy:** các cấu hình chính rất ổn định theo seed (CV ≤ 1%), và chọn cấu hình theo validation cho cùng thứ hạng như trên test; nhưng mô hình residual rất nhạy với cảm biến hỏng (5% đầu vào = 0 làm RMSE tăng 30–60%) ⇒ cần bước kiểm tra dữ liệu khi triển khai.
 
-SUMMARY_SZ
+**Trên SZ-taxi** (dữ liệu taxi nhiễu, 25% giá trị thiếu), kết luận chính được lặp lại: T-GCN kém GRU có ý nghĩa (4.23 so với 4.18 RMSE), và cả hai chỉ hơn trung bình trượt 3 giờ ~1–3%; baseline HA trong bài báo cho SZ-taxi (7.92) yếu gần gấp đôi một trung bình trượt đúng nghĩa (4.17). Residual không giúp trên dữ liệu nhiễu — cải tiến phải phù hợp tính chất dữ liệu.
 
 **Mục lục:** 1. Ý tưởng · 2. Dữ liệu & kiểm tra dữ liệu · 3. Phương pháp · 4. Phản biện bài báo · 5. Kết quả 3 giai đoạn · 6. Mô hình huấn luyện được & cách dùng · 7. Minh chứng – giải thích cơ chế · 8. Độ tin cậy · 9. So sánh với bài báo · 10. SZ-taxi · 11. Hạn chế & hướng phát triển · 12. Kết luận
 
@@ -599,7 +599,50 @@ Nhận xét:
 
 ## 10. Kiểm chứng trên SZ-taxi
 
-SZ_SECTION
+Chúng tôi lặp lại giai đoạn 1–2 (3 seed) và các cải tiến chính (1 seed) trên SZ-taxi — bộ dữ liệu khác hẳn Los-loop: đường đô thị, tốc độ ước lượng từ taxi (rất nhiễu, tự tương quan 15 phút chỉ 0.41), 24.8% giá trị bằng 0 (thiếu quan sát), đồ thị có hướng và thưa (bậc 3.4). Hidden = 64, L = 12 (3 giờ), H = 4 (15…60 phút).
+
+**Tất cả mục tiêu (cách chấm của bài báo, gồm cả số 0):**
+
+| Mô hình | seed | RMSE val (chọn) | RMSE TB | MAE TB | 15 phút RMSE | 15 phút MAE | 60 phút RMSE | 60 phút MAE |
+|---|---|---|---|---|---|---|---|---|
+| Naive (giữ giá trị cuối) | 1 | — | 5.391 | 3.412 | 5.246 | 3.310 | 5.508 | 3.494 |
+| HA (TB cửa sổ) | 1 | — | 4.240 | 2.786 | 4.163 | 2.731 | 4.310 | 2.837 |
+| HA theo giờ | 1 | — | 6.169 | 4.617 | 6.165 | 4.614 | 6.173 | 4.620 |
+| Hồi quy tuyến tính | 1 | — | 4.221 | 2.883 | 4.117 | 2.789 | 4.313 | 2.966 |
+| GCN | 3 | 4.206 ± 0.002 | 4.371 ± 0.004 | 2.963 ± 0.006 | 4.316 ± 0.003 | 2.925 ± 0.007 | 4.425 ± 0.011 | 3.002 ± 0.014 |
+| GRU | 3 | 3.970 ± 0.003 | 4.179 ± 0.005 | 2.775 ± 0.008 | 4.089 ± 0.006 | 2.715 ± 0.015 | 4.258 ± 0.008 | 2.828 ± 0.010 |
+| T-GCN | 3 | 4.019 ± 0.004 | 4.225 ± 0.005 | 2.825 ± 0.005 | 4.156 ± 0.004 | 2.782 ± 0.004 | 4.286 ± 0.007 | 2.864 ± 0.008 |
+| GRU-RT (GRU + residual + thời gian) | 1 | 3.977 | 4.172 | 2.772 | 4.083 | 2.699 | 4.245 | 2.830 |
+| T-GCN-RT (residual + thời gian) | 1 | 4.583 | 4.786 | 3.246 | 4.679 | 3.158 | 4.866 | 3.316 |
+| T-GCN (loss bỏ qua 0) | 1 | 4.499 | 4.379 | 3.111 | 4.304 | 3.059 | 4.438 | 3.145 |
+| T-GCN-RT (loss bỏ qua 0) | 1 | 5.044 | 4.904 | 3.435 | 4.796 | 3.352 | 4.977 | 3.489 |
+
+*RMSE validation của hai biến thể "loss bỏ qua 0" được tính trên mục tiêu ≠ 0 nên không so trực tiếp với các dòng khác.*
+
+**Chỉ mục tiêu ≠ 0 (có ý nghĩa thực tế):**
+
+| Mô hình | seed | RMSE val (chọn) | RMSE TB | MAE TB | 15 phút RMSE | 15 phút MAE | 60 phút RMSE | 60 phút MAE |
+|---|---|---|---|---|---|---|---|---|
+| Naive (giữ giá trị cuối) | 1 | — | 6.012 | 4.262 | 5.844 | 4.137 | 6.147 | 4.364 |
+| HA (TB cửa sổ) | 1 | — | 4.743 | 3.372 | 4.658 | 3.305 | 4.821 | 3.436 |
+| HA theo giờ | 1 | — | 6.674 | 5.170 | 6.670 | 5.167 | 6.679 | 5.173 |
+| Hồi quy tuyến tính | 1 | — | 4.661 | 3.348 | 4.554 | 3.255 | 4.755 | 3.431 |
+| GCN | 3 | 4.206 ± 0.002 | 4.860 ± 0.001 | 3.502 ± 0.003 | 4.804 ± 0.001 | 3.455 ± 0.003 | 4.914 ± 0.005 | 3.547 ± 0.008 |
+| GRU | 3 | 3.970 ± 0.003 | 4.619 ± 0.001 | 3.269 ± 0.002 | 4.522 ± 0.000 | 3.191 ± 0.005 | 4.703 ± 0.004 | 3.337 ± 0.004 |
+| T-GCN | 3 | 4.019 ± 0.004 | 4.694 ± 0.004 | 3.346 ± 0.004 | 4.618 ± 0.004 | 3.287 ± 0.004 | 4.762 ± 0.005 | 3.400 ± 0.006 |
+| GRU-RT (GRU + residual + thời gian) | 1 | 3.977 | 4.615 | 3.265 | 4.526 | 3.191 | 4.691 | 3.328 |
+| T-GCN-RT (residual + thời gian) | 1 | 4.583 | 5.280 | 3.780 | 5.161 | 3.683 | 5.367 | 3.854 |
+| T-GCN (loss bỏ qua 0) | 1 | 4.499 | 4.722 | 3.406 | 4.640 | 3.342 | 4.791 | 3.458 |
+| T-GCN-RT (loss bỏ qua 0) | 1 | 5.044 | 5.297 | 3.806 | 5.175 | 3.709 | 5.387 | 3.878 |
+
+Nhận xét:
+
+- **Cùng kết luận với Los-loop: T-GCN không vượt GRU** — trên SZ-taxi còn kém hơn có ý nghĩa (mục tiêu ≠ 0: 4.69 so với 4.62; kiểm định cặp trên sai số trung bình 3 seed: ΔRMSE +0.07, KTC 95% [+0.06; +0.09], DM p < 10⁻⁴). Theo validation, mô hình cuối cho SZ-taxi là **ensemble 3 seed GRU** (RMSE val 3.970, GRU-RT 3.977).
+- **Học sâu chỉ hơn trung bình trượt rất ít:** GRU 4.18 / 2.78 so với trung bình 12 bước đầu vào 4.24 / 2.79 (gồm số 0); 4.62 / 3.27 so với 4.74 / 3.37 (bỏ số 0). Persistence rất tệ (5.39) vì giá trị cuối nhiễu và hay bằng 0. Chuỗi SZ-taxi gần như "mức trung bình + nhiễu" ở độ phân giải 15 phút, nên trung bình hóa (theo thời gian hoặc theo láng giềng) là gần tối ưu.
+- **Residual không giúp, thậm chí phá T-GCN:** GRU-RT = GRU (p = 0.57), còn T-GCN-RT tệ hẳn (4.79). Với chuỗi nhiễu, mô hình phải học *triệt tiêu* phần x_t được cộng vào (Δ̂ ≈ mức trung bình − x_t), điều cần biết chính xác x_t — GRU làm được, T-GCN chỉ thấy ~26% giá trị của chính nút sau Â nên không làm được. Đây là thêm một hệ quả của hiện tượng "loãng tín hiệu" (mục 7.3), và cho thấy cải tiến tốt trên Los-loop (chuỗi mượt, tự tương quan 0.82) **không tự động chuyển sang** dữ liệu nhiễu.
+- **Loss bỏ qua số 0 không cải thiện** (T-GCN: 4.72 so với 4.69 trên mục tiêu ≠ 0), có lẽ vì đầu vào vẫn chứa số 0 và mô hình mất đi một phần tư tín hiệu huấn luyện. Cách xử lý đúng hơn là điền giá trị thiếu ở *đầu vào* (ví dụ bằng trung bình láng giềng hoặc theo giờ) — hướng phát triển.
+- **Đồ thị lại có ích khi tốc độ biến động mạnh** (MAE 15 phút với |Δ| > 10: T-GCN 8.50, GCN 8.62 so với GRU 9.05, persistence 14.3) — đúng như Los-loop. Trên SZ-taxi không có giờ cao điểm rõ rệt (MAE cao điểm ≈ ngoài cao điểm).
+- Dưới giao thức của tác giả (mục 9.2), GRU tái lập sát bài báo (4.10 so với 4.05), T-GCN sau 150 epoch vẫn chưa hội tụ (4.40 so với 3.92).
 
 ## 11. Hạn chế và hướng phát triển
 

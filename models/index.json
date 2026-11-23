@@ -63,8 +63,35 @@
     "test_MAE_all_horizons": 4.08003170487637
   },
   {
-    "file": "sztaxi_gru.pt",
+    "file": "sztaxi_tgcn.pt",
     "role": "comparison (best-validation seed)",
+    "dataset": "sztaxi",
+    "model": "tgcn",
+    "source_run": "results/sztaxi/main/tgcn/seed_42",
+    "test_RMSE_all_horizons": 4.225625196353225,
+    "test_MAE_all_horizons": 2.825120096504331
+  },
+  {
+    "file": "sztaxi_gru_seed123.pt",
+    "role": "FINAL model, ensemble member",
+    "dataset": "sztaxi",
+    "model": "gru",
+    "source_run": "results/sztaxi/main/gru/seed_123",
+    "test_RMSE_all_horizons": 4.173165765767921,
+    "test_MAE_all_horizons": 2.765566226501808
+  },
+  {
+    "file": "sztaxi_gru_seed2026.pt",
+    "role": "FINAL model, ensemble member",
+    "dataset": "sztaxi",
+    "model": "gru",
+    "source_run": "results/sztaxi/main/gru/seed_2026",
+    "test_RMSE_all_horizons": 4.1813473411659965,
+    "test_MAE_all_horizons": 2.7797494401853093
+  },
+  {
+    "file": "sztaxi_gru_seed42.pt",
+    "role": "FINAL model, ensemble member",
     "dataset": "sztaxi",
     "model": "gru",
     "source_run": "results/sztaxi/main/gru/seed_42",

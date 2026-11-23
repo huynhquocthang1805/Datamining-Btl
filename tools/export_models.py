@@ -2,7 +2,7 @@
 
 * comparison models: the seed with the lowest VALIDATION loss (never test)
 * final model (chosen among configurations by validation RMSE, see report 5.5):
-  all 3 seeds of GRU-RT, used together as an ensemble by predict.py
+  all 3 seeds of GRU-RT (Los-loop) / GRU (SZ-taxi), used together as an ensemble by predict.py
 
     python tools/export_models.py
 """
@@ -15,8 +15,8 @@ sys.path.insert(0, str(ROOT))
 import torch
 
 SINGLE = {'losloop': [('main', 'gru'), ('main', 'tgcn'), ('improve', 'tgcn_selfsep'), ('improve', 'tgcn_res_time')],
-          'sztaxi': [('main', 'gru'), ('main', 'tgcn'), ('improve', 'tgcn_res_time')]}
-FINAL = {'losloop': ('improve', 'gru_res_time'), 'sztaxi': ('improve', 'gru_res_time')}
+          'sztaxi': [('main', 'tgcn')]}
+FINAL = {'losloop': ('improve', 'gru_res_time'), 'sztaxi': ('main', 'gru')}   # chosen by validation RMSE
 
 
 def runs(ds, group, name):
