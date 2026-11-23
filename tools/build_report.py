@@ -1,4 +1,4 @@
-"""Assemble reports/BAO_CAO_TGCN.md from the draft parts, filling every numeric
+"""Assemble reports/BAO_CAO_TGCN.md from the text parts in reports/src/, filling every numeric
 table from reports/tables/*.csv so that no number is copied by hand.
 
     python tools/build_report.py && python tools/md2docx.py reports/BAO_CAO_TGCN.md reports/BAO_CAO_TGCN.docx
@@ -15,8 +15,9 @@ import pandas as pd
 from tgcn.plotstyle import label
 
 REP = ROOT / 'reports'; TAB = REP / 'tables'
-PARTS = ['_draft_part0.md', '_draft_part1.md', '_draft_part2.md', '_draft_part_critique.md',
-         '_draft_part3.md', '_draft_part_model.md', '_draft_part4.md', '_draft_part5.md', '_draft_part6.md']
+SRC = REP / 'src'   # hand-written text; numeric tables are filled in from reports/tables/*.csv
+PARTS = ['part0.md', 'part1.md', 'part2.md', 'part_critique.md',
+         'part3.md', 'part_model.md', 'part4.md', 'part5.md', 'part6.md']
 SECTION_ORDER = None
 
 
@@ -252,7 +253,7 @@ FILL = {'FINAL_TABLE': final_table, 'ORACLE_TABLE': oracle_table, 'PAPER_PROTOCO
 
 
 def main():
-    text = '\n\n'.join((REP / p).read_text(encoding='utf-8') for p in PARTS if (REP / p).is_file())
+    text = '\n\n'.join((SRC / p).read_text(encoding='utf-8') for p in PARTS if (SRC / p).is_file())
     for key, fn in FILL.items():
         if re.search(rf'^{key}$', text, flags=re.M):
             try:
