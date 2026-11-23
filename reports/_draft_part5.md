@@ -12,7 +12,7 @@ Kiểm định cặp trên cùng các mẫu test: bootstrap khối dịch chuy�
 
 PAIRWISE_TABLE
 
-Kết luận: (i) mọi mô hình học sâu vượt persistence có ý nghĩa; (ii) **T-GCN và GRU không khác nhau có ý nghĩa** (p = 0.76); (iii) residual + thời gian cải thiện GRU có ý nghĩa (p < 0.001); (iv) trong cấu hình RT, GRU-RT tốt hơn T-GCN-RT có ý nghĩa (p = 0.003).
+Kết luận: (i) mọi mô hình học sâu vượt persistence có ý nghĩa; (ii) **T-GCN gốc và GRU không khác nhau có ý nghĩa** (p = 0.76), nhưng **T-GCN tách self/láng giềng tốt hơn cả hai** (p = 0.010 và p < 0.001); (iii) residual + thời gian cải thiện GRU có ý nghĩa (p < 0.001); (iv) trong cấu hình RT, GRU-RT tốt hơn cả T-GCN-RT (p = 0.003) lẫn T-GCN-RTS (p = 0.002); (v) ensemble hỗn hợp GRU-RT + T-GCN-RTS không hơn ensemble GRU-RT (p = 0.50).
 
 Lưu ý: tập test của Los-loop chỉ là ~1.4 ngày (2 đợt cao điểm chiều, 1 đợt sáng). Các KTC trên phản ánh bất định *trong* giai đoạn đó, không bảo đảm cho tuần khác, mùa khác hay ngày lễ.
 
@@ -20,8 +20,8 @@ Lưu ý: tập test của Los-loop chỉ là ~1.4 ngày (2 đợt cao điểm ch
 
 ![Hình 17. RMSE khi thêm nhiễu Gauss (trái) và khi một tỉ lệ đầu vào bị mất, đặt = 0 (phải)](figures/rel_robustness_losloop.png)
 
-- **Nhiễu đo đạc:** mọi mô hình suy giảm chậm hơn persistence. Trong nhóm không residual, **T-GCN bền nhất** (σ = 8 mph: RMSE 8.20 so với 8.58 của GRU): tích chập đồ thị trung bình hóa nhiễu độc lập giữa các cảm biến — đây là một lợi ích thật của đồ thị mà sai số trên dữ liệu sạch không cho thấy.
-- **Cảm biến hỏng (đầu vào = 0):** các mô hình residual **rất mong manh** (5% đầu vào hỏng: T-GCN-RT 7.35 → 12.0; GRU-RT 7.05 → 9.4) vì chúng cộng thẳng giá trị cuối (= 0). GRU thường bền nhất (8.4). ⇒ Khi triển khai mô hình residual **bắt buộc** phải kiểm tra/điền giá trị thiếu trước khi dự báo.
+- **Nhiễu đo đạc:** mọi mô hình suy giảm chậm hơn persistence. Trong nhóm không residual, **các mô hình có đồ thị bền hơn GRU** (σ = 8 mph: T-GCN 8.20, T-GCN tách self 8.32, GRU 8.58): tích chập đồ thị trung bình hóa nhiễu độc lập giữa các cảm biến — một lợi ích thật của đồ thị mà sai số trên dữ liệu sạch không cho thấy.
+- **Cảm biến hỏng (đầu vào = 0):** các mô hình residual **rất mong manh** (5% đầu vào hỏng: T-GCN-RT 7.35 → 12.0; GRU-RT 7.05 → 9.4) vì chúng cộng thẳng giá trị cuối (= 0). GRU thường và T-GCN tách self bền nhất (5% hỏng: 8.39 và 8.37). ⇒ Khi triển khai mô hình residual **bắt buộc** phải kiểm tra/điền giá trị thiếu trước khi dự báo.
 
 ### 8.4 Khoảng dự báo có đáng tin không? (conformal)
 

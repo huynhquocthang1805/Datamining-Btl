@@ -30,7 +30,7 @@ Nhận xét:
 
 | Giả thuyết | Kết luận | Bằng chứng chính |
 |---|---|---|
-| H1 – Đồ thị có ích (T-GCN > GRU) | **Bác bỏ ở dạng gốc; đúng một phần sau khi sửa** | T-GCN ≈ GRU (p = 0.76), MAE kém hơn; đồ thị chỉ giúp ở tầm xa, biến động mạnh, dữ liệu nhiễu; dạng tách self/láng giềng thì tốt hơn GRU |
+| H1 – Đồ thị có ích (T-GCN > GRU) | **Bác bỏ ở dạng gốc; đúng sau khi sửa** | T-GCN gốc ≈ GRU (p = 0.76), MAE kém hơn; dạng tách self/láng giềng tốt hơn GRU có ý nghĩa (p = 0.01); đồ thị giúp ở tầm xa, biến động mạnh, dữ liệu nhiễu — nhưng không cộng thêm khi đã có residual + thời gian |
 | H2 – Học sâu > baseline đơn giản | **Đúng tổng thể, sai ở giờ cao điểm** | Mọi mô hình vượt persistence (p < 0.005), nhưng trong cao điểm/kẹt xe persistence có MAE thấp nhất |
 | H3 – Con số bài báo đáng tin | **Lạc quan** | Chọn epoch theo test, gộp tầm dự báo, không baseline persistence, không độ biến thiên |
 | H4 – Có thể cải tiến | **Đúng** | Residual + thời gian (+ ensemble 3 seed): −7.8% RMSE so với GRU, −8.1% so với T-GCN, có ý nghĩa thống kê; tách self/láng giềng giúp T-GCN |

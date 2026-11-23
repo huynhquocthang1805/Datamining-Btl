@@ -69,7 +69,7 @@ ABLATION_TABLE
 
 - **Residual sửa tầm ngắn, đặc trưng thời gian sửa tầm dài.** T-GCN + residual: 5 phút 4.84 → 4.33 nhưng 60 phút gần như không đổi; T-GCN + thời gian: 60 phút 9.07 → 8.53 nhưng 5 phút xấu đi. Kết hợp (T-GCN-RT) lấy được cả hai.
 - **Cùng ô T-GCN-RT nhưng bỏ đồ thị (Â = I) lại tốt hơn có đồ thị** (7.09 so với 7.35). Với cách chuẩn hóa của tác giả, đồ thị vật lý gây hại khi mô hình đã có residual + thời gian.
-- **Tách self/láng giềng ([x, Âx]W) là cách duy nhất làm đồ thị có lợi:** T-GCN tách self (không RT) đạt SELFSEP_PLAIN — tốt hơn cả GRU và T-GCN gốc; T-GCN-RT tách self đạt 7.17 / 4.13 so với 7.35 / 4.32 của T-GCN-RT.
+- **Tách self/láng giềng ([x, Âx]W) là cách duy nhất làm đồ thị có lợi:** T-GCN tách self (không RT) đạt **7.30 ± 0.06 / 4.12 ± 0.02 qua 3 seed — tốt hơn GRU có ý nghĩa thống kê** (ΔRMSE −0.20, KTC 95% [−0.34; −0.07], DM p = 0.010) và tốt hơn T-GCN gốc (p < 0.001); T-GCN-RT tách self đạt 7.17 / 4.13 so với 7.35 / 4.32 của T-GCN-RT.
 - **Loss theo đơn vị gốc** (nhân trọng số std² cho mỗi cảm biến, để cảm biến hay kẹt được coi trọng như khi chấm điểm) cải thiện GRU-RT ở seed 42 (6.94 / 4.03 so với 7.05 / 4.08) — nhưng **không lặp lại qua 3 seed** (7.14 ± 0.24 so với 6.98 ± 0.06) và không giúp T-GCN-RT. Đây là ví dụ cụ thể vì sao không được kết luận từ một lần chạy (đúng lỗi P7 của bài báo).
 - **Huber** đổi RMSE lấy MAE (MAE 4.32 → 4.14, RMSE 7.35 → 7.39) — đúng như lý thuyết (Huber nhắm trung vị nhiều hơn kỳ vọng).
 - **Đồ thị thích nghi (T-GCN+)** không mang lại gì (7.37 so với 7.35): 207 × 8 tham số embedding không học được quan hệ mới từ 5 ngày dữ liệu.
