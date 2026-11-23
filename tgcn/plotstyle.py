@@ -22,8 +22,8 @@ MODEL_COLORS = {
     'gru': '#2a78d6', 'gcn': '#1baf7a', 'tgcn': '#eb6834',
     'tgcn_res': '#e87ba4', 'tgcn_time': '#008300', 'tgcn_res_time': '#6250d6',
     'gru_res_time': '#86b6ef', 'tgcn_plus': '#e34948', 'tgcn_res_time_huber': '#9085e9',
-    'ensemble': '#0d366b', 'ensemble_mix': '#0d366b', 'ensemble_gru_res_time': '#184f95',
-    'tgcn_selfsep_res_time': '#1c5cab', 'tgcn_selfsep': '#9ec5f4', 'tgcn_selfloop1': '#d6d5cf',
+    'ensemble': '#0d366b', 'ensemble_mix': '#5598e7', 'ensemble_gru_res_time': '#184f95',
+    'tgcn_selfsep_res_time': '#1c5cab', 'tgcn_selfsep': '#0d366b', 'tgcn_selfloop1': '#d6d5cf',
     'gru_res_time_rawloss': '#86b6ef', 'tgcn_res_time_rawloss': '#9085e9',
 }
 MODEL_LABELS = {

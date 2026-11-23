@@ -117,7 +117,7 @@ def predict_split(model, b, cfg, split, perturb=None, seed=0):
 
 
 def robustness(by, ds, mask_zero):
-    names = [n for n in ('gru', 'tgcn', 'gru_res_time', 'tgcn_res_time') if n in by]
+    names = [n for n in ('gru', 'tgcn', 'tgcn_selfsep', 'gru_res_time', 'tgcn_res_time') if n in by]
     gauss = [0, 1, 2, 4, 8]; fail = [0, 5, 10, 20, 30]
     rows = []
     for name in names + ['naive']:
@@ -160,7 +160,7 @@ def robustness(by, ds, mask_zero):
 
 def conformal(by, ds, mask_zero, alpha=0.1):
     rows = []
-    for name in ('gru', 'tgcn', 'tgcn_res_time'):
+    for name in ('gru', 'tgcn', 'gru_res_time', 'tgcn_res_time'):
         if name not in by: continue
         r = [x for x in by[name] if x['seed'] == 42] or by[name]
         model, b, cfg = load_model(r[0]['dir'])
@@ -261,7 +261,10 @@ def main():
     pairs = [('tgcn', 'gru'), ('tgcn', 'naive'), ('gru', 'naive'), ('tgcn', 'linear'),
              ('tgcn_res_time', 'tgcn'), ('tgcn_res_time', 'naive'), ('tgcn_res_time', 'gru_res_time'),
              ('tgcn_res_time', 'linear'), ('gru_res_time', 'gru'), ('gru_res_time', 'naive'),
-             ('ensemble_tgcn_res_time', 'tgcn_res_time'), ('ensemble_gru_res_time', 'gru_res_time')]
+             ('tgcn_selfsep', 'gru'), ('tgcn_selfsep', 'tgcn'),
+             ('tgcn_selfsep_res_time', 'tgcn_res_time'), ('tgcn_selfsep_res_time', 'gru_res_time'),
+             ('ensemble_tgcn_res_time', 'tgcn_res_time'), ('ensemble_gru_res_time', 'gru_res_time'),
+             ('ensemble_mix', 'ensemble_gru_res_time')]
     pw = pairwise(by, pairs, block, mask_zero); pw.to_csv(TAB / f'rel_pairwise_{ds}.csv', index=False)
     print(pw.round(4).to_string())
     if ds == 'losloop':
