@@ -50,6 +50,8 @@ def configs(dataset, groups):
                              ['--model', 'tgcn', '--self-sep', *RT, '--seed', str(s), *base()]))
                 runs.append((f'improve/gru_res_time_rawloss/seed_{s}',
                              ['--model', 'gru', *RT, '--raw-loss', '--seed', str(s), *base()]))
+                runs.append((f'improve/tgcn_selfsep/seed_{s}',
+                             ['--model', 'tgcn', '--self-sep', '--seed', str(s), *base()]))
         if dataset == 'sztaxi':
             runs.append(('improve/tgcn_res_time_masked/seed_42',
                          ['--model', 'tgcn', *RT, '--mask-zero', '--seed', '42', *base()]))

@@ -18,9 +18,10 @@ ORDER = ['naive', 'ha_window', 'ha_tod', 'linear', 'gcn', 'gru', 'tgcn', 'tgcn_t
          'tgcn_selfsep', 'tgcn_selfsep_res_time', 'tgcn_selfloop1',
          'gru_res_time_rawloss', 'tgcn_res_time_rawloss',
          'tgcn_masked', 'tgcn_res_time_masked',
-         'ensemble_gru', 'ensemble_tgcn', 'ensemble_gru_res_time', 'ensemble_tgcn_res_time',
+         'ensemble_gru', 'ensemble_tgcn', 'ensemble_tgcn_selfsep', 'ensemble_gru_res_time', 'ensemble_tgcn_res_time',
          'ensemble_tgcn_selfsep_res_time', 'ensemble_gru_res_time_rawloss', 'ensemble_mix']
-ENSEMBLE_OF = ['gru', 'tgcn', 'gru_res_time', 'tgcn_res_time', 'tgcn_selfsep_res_time', 'gru_res_time_rawloss']
+ENSEMBLE_OF = ['gru', 'tgcn', 'tgcn_selfsep', 'gru_res_time', 'tgcn_res_time', 'tgcn_selfsep_res_time',
+               'gru_res_time_rawloss']
 # heterogeneous ensemble: temporal-only + spatio-temporal family, equal weight per family
 MIX = ['gru_res_time', 'tgcn_selfsep_res_time']
 
