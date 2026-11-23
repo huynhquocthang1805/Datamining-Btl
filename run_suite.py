@@ -68,11 +68,14 @@ def configs(dataset, groups):
             runs.append((f'tuning/tgcn_res_time_seq{L}/seed_42',
                          ['--model', 'tgcn', *RT, '--seed', '42', *base(L=L)]))
     if 'paper' in groups:         # authors' protocol, only to reproduce Table 1
-        hp = {'losloop': ('3', '64'), 'sztaxi': ('1', '100')}.get(dataset, ('3', '16'))
+        # authors: lr 1e-3 constant, batch 32, thousands of epochs, keep min-test epoch
+        hp = {'losloop': ('3', '64', '300'), 'sztaxi': ('1', '100', '150')}.get(dataset, ('3', '16', '5'))
         for m in ('gru', 'tgcn'):
             runs.append((f'paper_protocol/{m}/seed_42',
                          ['--model', m, '--protocol', 'paper', '--seed', '42', '--horizon', hp[0],
-                          '--seq-len', '12', '--hidden-dim', hp[1], '--batch-size', '32']))
+                          '--seq-len', '12', '--hidden-dim', hp[1], '--batch-size', '32',
+                          '--lr', '0.001', '--lr-schedule', 'none', '--epochs', hp[2],
+                          '--patience', hp[2]]))
     return runs
 
 

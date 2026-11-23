@@ -58,13 +58,24 @@ def read_csv_dataset(data_dir: Path):
     return values, adj, [str(x) for x in df.columns]
 
 
-def normalized_adjacency(adj: np.ndarray) -> np.ndarray:
-    a = np.maximum(adj, adj.T).astype(np.float32, copy=True)
-    np.fill_diagonal(a, 1.0)
-    degrees = np.sum(a, axis=1)
-    inv = 1.0 / np.sqrt(np.maximum(degrees, 1e-6))
-    norm = inv[:, None] * a * inv[None, :]
-    return norm.astype(np.float32)
+def normalized_adjacency(adj: np.ndarray, mode: str = 'authors') -> np.ndarray:
+    """Normalised adjacency used by the graph convolutions.
+
+    mode='authors' (default) reproduces calculate_laplacian() of the official
+    T-GCN code exactly:  a = A + I,  d = rowsum(a)^-1/2,  Â = diag(d) aᵀ diag(d).
+    Note: los_adj.csv already has 1 on its diagonal, so the effective self-loop
+    weight is 2; sz_adj.csv is directed and is NOT symmetrised.
+    mode='symmetric_selfloop1': max(A, Aᵀ) with the diagonal set to 1 (the
+    first version of this project; kept for the self-loop ablation).
+    """
+    a = np.asarray(adj, dtype=np.float64)
+    if mode == 'symmetric_selfloop1':
+        a = np.maximum(a, a.T).copy(); np.fill_diagonal(a, 1.0)
+        d = 1.0 / np.sqrt(np.maximum(a.sum(1), 1e-6))
+        return (d[:, None] * a * d[None, :]).astype(np.float32)
+    a = a + np.eye(len(a))
+    d = np.power(a.sum(1), -0.5); d[~np.isfinite(d)] = 0.0
+    return (d[:, None] * a.T * d[None, :]).astype(np.float32)
 
 
 def make_time_features(length: int, start_time: str, interval_min: int) -> np.ndarray:
