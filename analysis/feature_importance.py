@@ -140,7 +140,7 @@ def main():
     p = argparse.ArgumentParser(); p.add_argument('--dataset', default='losloop')
     p.add_argument('--nodes', type=int, default=60)
     a = p.parse_args(); ds = a.dataset
-    models = [m for m in ('gru', 'tgcn', 'gru_res_time', 'tgcn_res_time') if pick(ds, m)]
+    models = [m for m in ('gru', 'tgcn', 'gru_res_time', 'tgcn_res_time', 'tgcn_selfsep_res_time') if pick(ds, m)]
     allrows = []; sal = {}
     for name in models:
         model, b, cfg = load_model(pick(ds, name))
@@ -149,7 +149,7 @@ def main():
         df, r0 = importance(model, b, cfg, ds, nodes)
         df['model'] = name; df['RMSE_base'] = r0; allrows.append(df)
         print(name, 'base RMSE', round(r0, 4)); print(df.round(4).to_string())
-        if name in ('tgcn', 'tgcn_res_time', 'gru'):
+        if name in ('gru', 'tgcn', 'tgcn_selfsep_res_time'):
             sal[name] = saliency(model, b, cfg, ds)
             sal[name].to_csv(TAB / f'fi_saliency_{name}_{ds}.csv')
     res = pd.concat(allrows); res.to_csv(TAB / f'feature_importance_{ds}.csv', index=False)
