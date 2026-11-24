@@ -1,0 +1,176 @@
+"""Gradient-boosted trees (LightGBM) on engineered spatio-temporal features.
+
+A classic data-mining approach to the same task and the same protocol (70/10/20
+chronological split, train-only statistics, identical test windows), so its
+numbers are directly comparable with GRU / T-GCN.
+
+For every (forecast time t, sensor i) one row with ~45 features:
+  own history  : z-scored speed at lags 1..12, differences, rolling mean/std/min/max
+  neighbours   : mean of 1-hop neighbours (P z) at lags 1..4, its change, 2-hop mean,
+                 slowest neighbour, own-minus-neighbour gap
+  calendar     : time of day (fraction, sin, cos), day of week, weekend flag
+  profile      : historical mean for the current time-of-day slot (train days) and the
+                 profile change expected between now and t+k  (horizon specific)
+  sensor       : train mean / std of the sensor, graph degree
+Target: change z(t+k) - z(t) (residual formulation), one model per horizon k,
+early stopping on the validation split.
+
+    python gbdt.py --dataset losloop --seeds 42 123 2026
+    python gbdt.py --dataset sztaxi  --seeds 42
+"""
+import argparse
+import json
+import time
+from pathlib import Path
+import numpy as np
+import pandas as pd
+import lightgbm as lgb
+from tgcn.data import load_bundle, TrafficWindows
+from tgcn.metrics import horizon_metrics, metrics
+from tgcn.utility import ROOT, save_json
+
+DEFAULT_H = {'losloop': 12, 'sztaxi': 4}
+
+
+def neighbour_ops(bundle):
+    a = bundle.adj.astype(np.float64).copy()
+    np.fill_diagonal(a, 0.0)
+    d = a.sum(1, keepdims=True)
+    p = np.divide(a, d, out=np.zeros_like(a), where=d > 0)        # row-normalised, no self
+    nb = [np.where(a[i] > 0)[0] for i in range(len(a))]
+    return p, nb
+
+
+def tod_profile(bundle, slots, smooth=2):
+    """Per-sensor mean z-score of each time-of-day slot over the TRAIN part (circularly smoothed)."""
+    ts = bundle.timestamps
+    slot = ((ts.hour * 60 + ts.minute) // bundle.interval_min).to_numpy()
+    tr = bundle.splits['train'][1]
+    z = bundle.scaled[:tr]
+    prof = np.zeros((slots, z.shape[1]))
+    cnt = np.zeros(slots)
+    for k in range(slots):
+        sel = slot[:tr] == k
+        if sel.any():
+            prof[k] = z[sel].mean(0); cnt[k] = sel.sum()
+    kern = np.ones(2 * smooth + 1) / (2 * smooth + 1)
+    prof = np.stack([np.convolve(np.r_[prof[-smooth:, j], prof[:, j], prof[:smooth, j]], kern, 'valid')
+                     for j in range(prof.shape[1])], axis=1)
+    return prof, slot
+
+
+def build_features(bundle, starts, L, H, p, nb, prof, slot):
+    z = bundle.scaled.astype(np.float64)                          # [T,N]
+    T, N = z.shape
+    pz = z @ p.T                                                  # 1-hop neighbour mean
+    p2z = pz @ p.T                                                # 2-hop
+    zmin_nb = np.full((T, N), np.nan)
+    for i in range(N):
+        if len(nb[i]):
+            zmin_nb[:, i] = z[:, nb[i]].min(1)
+    s = np.asarray(starts)
+    last = s - 1
+    lag = np.stack([z[last - j] for j in range(L)], axis=-1)       # [S,N,L] lag1..L
+    feats = {f'lag{j + 1}': lag[..., j] for j in range(L)}
+    for j in (1, 3, 6, L - 1):
+        feats[f'diff_1_{j + 1}'] = lag[..., 0] - lag[..., j]
+    feats.update({'mean3': lag[..., :3].mean(-1), 'mean12': lag.mean(-1), 'std12': lag.std(-1),
+                  'min12': lag.min(-1), 'max12': lag.max(-1)})
+    for j in range(4):
+        feats[f'nb_lag{j + 1}'] = pz[last - j]
+    feats['nb_diff'] = pz[last] - pz[last - 1]
+    feats['nb_diff3'] = pz[last] - pz[last - 3]
+    feats['nb2_lag1'] = p2z[last]
+    feats['nb_min_lag1'] = zmin_nb[last]
+    feats['self_minus_nb'] = z[last] - pz[last]
+    ts = bundle.timestamps
+    tod = ((ts.hour * 60 + ts.minute) / 1440.0).to_numpy()
+    dow = ts.dayofweek.to_numpy()
+    bc = lambda v: np.repeat(v[:, None], N, axis=1)
+    feats.update({'tod': bc(tod[last]), 'tod_sin': bc(np.sin(2 * np.pi * tod[last])),
+                  'tod_cos': bc(np.cos(2 * np.pi * tod[last])), 'dow': bc(dow[last]),
+                  'weekend': bc((dow[last] >= 5).astype(float))})
+    slots = prof.shape[0]
+    feats['prof_now'] = prof[slot[last]]
+    feats['dev_from_prof'] = z[last] - prof[slot[last]]
+    feats.update({'sensor_mean': np.broadcast_to(bundle.means, (len(s), N)),
+                  'sensor_std': np.broadcast_to(bundle.stds, (len(s), N)),
+                  'degree': np.broadcast_to(np.array([len(x) for x in nb], float), (len(s), N))})
+    base = pd.DataFrame({k: np.asarray(v, dtype=np.float32).ravel() for k, v in feats.items()})
+    prof_change = {k: (prof[(slot[last] + k) % slots] - prof[slot[last]]).ravel().astype(np.float32)
+                   for k in range(1, H + 1)}
+    return base, prof_change, z[last]
+
+
+def run(dataset, seed, L=12, H=None, threads=2, out_root=None):
+    H = H or DEFAULT_H[dataset]
+    b = load_bundle(ROOT / 'data' / dataset, dataset, L, H)
+    p, nb = neighbour_ops(b)
+    slots = int(round(1440 / b.interval_min))
+    prof, slot = tod_profile(b, slots)
+    sets = {}
+    for split in ('train', 'val', 'test'):
+        st = TrafficWindows(b, split, L, H).starts
+        X, pc, zlast = build_features(b, st, L, H, p, nb, prof, slot)
+        Yz = np.stack([b.scaled[st + k] for k in range(H)], axis=1)          # [S,H,N]
+        sets[split] = (st, X, pc, zlast, Yz)
+    params = dict(objective='l2', learning_rate=0.05, num_leaves=63, min_child_samples=100,
+                  subsample=0.8, subsample_freq=1, colsample_bytree=0.8, reg_lambda=1.0,
+                  n_estimators=3000, random_state=seed, n_jobs=threads, verbose=-1)
+    preds = {sp: np.zeros_like(sets[sp][4]) for sp in ('val', 'test')}
+    importance = []; best_iters = []
+    t0 = time.time()
+    for k in range(H):
+        def xy(sp):
+            st, X, pc, zlast, Yz = sets[sp]
+            Xk = X.copy(); Xk['prof_change_k'] = pc[k + 1]
+            yk = (Yz[:, k, :] - zlast).ravel()
+            return Xk, yk
+        Xtr, ytr = xy('train'); Xva, yva = xy('val')
+        m = lgb.LGBMRegressor(**params)
+        m.fit(Xtr, ytr, eval_set=[(Xva, yva)], callbacks=[lgb.early_stopping(100, verbose=False)])
+        best_iters.append(int(m.best_iteration_))
+        importance.append(pd.Series(m.booster_.feature_importance('gain'), index=Xtr.columns, name=k + 1))
+        for sp in ('val', 'test'):
+            Xs, _ = xy(sp)
+            st, _, _, zlast, _ = sets[sp]
+            preds[sp][:, k, :] = (m.predict(Xs, num_iteration=m.best_iteration_).reshape(len(st), -1) + zlast)
+        print(f'  horizon {k + 1}/{H}: best_iter {best_iters[-1]}', flush=True)
+    raw = lambda zz: zz * b.stds[None, None, :] + b.means[None, None, :]
+    yv, yt = raw(sets['val'][4]), raw(sets['test'][4])
+    pv, pt = raw(preds['val']), raw(preds['test'])
+    sc = horizon_metrics(yt, pt, b.interval_min)
+    if (yt == 0).any():
+        sc['masked_nonzero'] = horizon_metrics(yt, pt, b.interval_min, mask_zero=True)
+    val_rmse = metrics(yv, pv, mask_zero=False)['RMSE']
+    out = Path(out_root or ROOT / 'results' / dataset / 'modern' / 'lgbm' / f'seed_{seed}')
+    out.mkdir(parents=True, exist_ok=True)
+    sc.update({'dataset': dataset, 'model': 'lgbm', 'seed': seed, 'best_epoch': None, 'caution': '',
+               'n_samples': int(len(sets['test'][0])), 'data_is_synthetic': False})
+    save_json(sc, out / 'metrics.json')
+    save_json({'model': 'lgbm', 'params': params, 'best_iterations': best_iters, 'seq_len': L, 'horizon': H,
+               'features': list(sets['train'][1].columns) + ['prof_change_k']}, out / 'config.json')
+    save_json({'best_epoch': None, 'val_rmse_raw': val_rmse, 'train_seconds': time.time() - t0,
+               'n_parameters': None}, out / 'training_summary.json')
+    pd.DataFrame({'epoch': [1], 'val_mse_scaled': [np.nan], 'val_rmse_raw': [val_rmse]}).to_csv(out / 'history.csv', index=False)
+    np.savez_compressed(out / 'test_predictions.npz', y_true=yt.astype(np.float32), y_pred=pt.astype(np.float32),
+                        time_indices=sets['test'][0], sensor_ids=np.array(b.sensor_ids))
+    imp = pd.concat(importance, axis=1).fillna(0)
+    imp.to_csv(out / 'feature_importance_gain.csv')
+    print(f'{dataset} seed {seed}: test RMSE {sc["overall"]["RMSE"]:.3f} MAE {sc["overall"]["MAE"]:.3f} '
+          f'| val RMSE {val_rmse:.3f} | {time.time() - t0:.0f}s', flush=True)
+    return sc
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('--dataset', default='losloop', choices=list(DEFAULT_H))
+    ap.add_argument('--seeds', nargs='+', type=int, default=[42])
+    ap.add_argument('--threads', type=int, default=2)
+    a = ap.parse_args()
+    for s in a.seeds:
+        run(a.dataset, s, threads=a.threads)
+
+
+if __name__ == '__main__':
+    main()

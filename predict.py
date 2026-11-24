@@ -46,6 +46,7 @@ class Forecaster:
 
         class _B:  # minimal bundle for build_model
             adj = stats['adj_normalized'].numpy(); sensor_ids = self.sensor_ids
+            interval_min = int(stats['interval_min'])
         self.model = build_model(argparse.Namespace(**cfg), _B).to(device)
         self.model.load_state_dict(ck['state_dict']); self.model.eval()
         self.device = device; self.best_epoch = ck.get('best_epoch')

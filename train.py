@@ -12,7 +12,10 @@ def build_parser():
     p=argparse.ArgumentParser(description='Traffic forecasting with GRU, T-GCN, T-GCN+')
     p.add_argument('--dataset',choices=['losloop','sztaxi','demo'],default='losloop')
     p.add_argument('--data-dir',type=str,default=None)
-    p.add_argument('--model',choices=['gru','gcn','tgcn','tgcn_plus'],default='tgcn')
+    p.add_argument('--model',choices=['gru','gcn','tgcn','tgcn_plus','stid','gwnet','dcrnn','staeformer'],
+                   default='tgcn')
+    p.add_argument('--size',choices=['compact','full'],default='compact',
+                   help='modern models: compact (CPU) or the papers\' full sizes (GPU).')
     p.add_argument('--seq-len',type=int,default=12)
     p.add_argument('--horizon',type=int,default=3)
     p.add_argument('--hidden-dim',type=int,default=64,
@@ -27,6 +30,9 @@ def build_parser():
     p.add_argument('--residual',action='store_true',
                    help='gru/tgcn: predict change w.r.t. last observed speed.')
     p.add_argument('--adaptive-graph',action='store_true',help='tgcn: learn extra graph.')
+    p.add_argument('--profile',action='store_true',
+                   help='gru/tgcn: add the per-sensor time-of-day profile (train-only) as input '
+                        'and its expected change to every forecast step.')
     p.add_argument('--self-sep',action='store_true',
                    help='tgcn: separate weights for the node itself and its neighbours ([x, Ax]W).')
     p.add_argument('--no-graph',action='store_true',
@@ -76,7 +82,8 @@ def build_model(args,bundle):
                       seq_len=args.seq_len,time_features=a.get('time_features',False),
                       residual=a.get('residual',False),
                       adaptive_graph=a.get('adaptive_graph',False),
-                      no_graph=a.get('no_graph',False),self_sep=a.get('self_sep',False))
+                      no_graph=a.get('no_graph',False),self_sep=a.get('self_sep',False),
+                      size=a.get('size','compact'),profile=a.get('profile',False))
 
 
 def run(args):

@@ -77,6 +77,27 @@ def configs(dataset, groups):
         for L in (6, 24):
             runs.append((f'tuning/tgcn_res_time_seq{L}/seed_42',
                          ['--model', 'tgcn', *RT, '--seed', '42', *base(L=L)]))
+    if 'modern' in groups:        # newer architectures, same protocol (3 seeds for the cheap ones)
+        cheap = {'gru_rtp': ['--model', 'gru', *RT, '--profile'],
+                 'tgcn_rtsp': ['--model', 'tgcn', '--self-sep', *RT, '--profile'],
+                 'stid': ['--model', 'stid'], 'stid_res': ['--model', 'stid', '--residual']}
+        for s in SEEDS:
+            for name, flags in cheap.items():
+                runs.append((f'modern/{name}/seed_{s}', [*flags, '--seed', str(s), *base()]))
+        for name, flags in {'dcrnn': ['--model', 'dcrnn'], 'dcrnn_res': ['--model', 'dcrnn', '--residual']}.items():
+            runs.append((f'modern/{name}/seed_42', [*flags, '--seed', '42', *base()]))
+        for name, flags in {'gwnet': ['--model', 'gwnet'], 'gwnet_res': ['--model', 'gwnet', '--residual']}.items():
+            runs.append((f'modern/{name}/seed_42', [*flags, '--seed', '42', *base(), '--epochs', '60',
+                                                    '--patience', '12']))
+    if 'modern_gpu' in groups:    # papers' full sizes; meant for a local GPU (see LOCAL_RUN.md)
+        for s in SEEDS:
+            for name, flags in {'gwnet_full': ['--model', 'gwnet', '--size', 'full'],
+                                'gwnet_full_res': ['--model', 'gwnet', '--size', 'full', '--residual'],
+                                'staeformer_full': ['--model', 'staeformer', '--size', 'full'],
+                                'staeformer_full_res': ['--model', 'staeformer', '--size', 'full', '--residual'],
+                                'staeformer': ['--model', 'staeformer'],
+                                'gwnet': ['--model', 'gwnet'], 'gwnet_res': ['--model', 'gwnet', '--residual']}.items():
+                runs.append((f'modern_gpu/{name}/seed_{s}', [*flags, '--seed', str(s), *base()]))
     if 'paper' in groups:         # authors' protocol, only to reproduce Table 1
         # authors: lr 1e-3 constant, batch 32, thousands of epochs, keep min-test epoch
         hp = {'losloop': ('3', '64', '300'), 'sztaxi': ('1', '100', '150')}.get(dataset, ('3', '16', '5'))
@@ -95,15 +116,19 @@ def main():
     p.add_argument('--spec', nargs='+', default=None,
                    help='dataset:group pairs sharing one job pool, e.g. losloop:paper sztaxi:main')
     p.add_argument('--groups', nargs='+', default=['main'],
-                   choices=['main', 'improve', 'variants', 'tuning', 'paper'])
+                   choices=['main', 'improve', 'variants', 'tuning', 'paper', 'modern', 'modern_gpu'])
     p.add_argument('--jobs', type=int, default=4)
     p.add_argument('--threads', type=int, default=1, help='torch threads per job')
+    p.add_argument('--device', default='cpu', choices=['cpu', 'cuda', 'auto'])
+    p.add_argument('--only', nargs='+', default=None, help='run only these run names (prefix match)')
     p.add_argument('--epochs', type=int, default=120)
     p.add_argument('--patience', type=int, default=20)
     p.add_argument('--dry-run', action='store_true')
     a = p.parse_args()
     spec = [tuple(x.split(':')) for x in a.spec] if a.spec else [(a.dataset, g) for g in a.groups]
     runs = [(ds, n, f) for ds, g in spec for n, f in configs(ds, [g])]
+    if a.only:
+        runs = [(ds, n, f) for ds, n, f in runs if any(n.startswith(o) for o in a.only)]
     todo = [(ds, n, f) for ds, n, f in runs
             if not (ROOT / 'results' / ds / n / 'metrics.json').is_file()]
     print(f'{len(runs)} runs, {len(todo)} to do', flush=True)
@@ -115,7 +140,7 @@ def main():
         out = ROOT / 'results' / ds / name
         cmd = [sys.executable, str(ROOT / 'train.py'), '--dataset', ds,
                '--epochs', str(a.epochs), '--patience', str(a.patience), '--track-test',
-               '--device', 'cpu', '--result-dir', str(out), *flags]
+               '--device', a.device, '--result-dir', str(out), *flags]
         if a.dry_run:
             print(' '.join(cmd)); return
         t0 = time.time()

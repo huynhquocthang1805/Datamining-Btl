@@ -193,3 +193,22 @@ def target_mask(bundle: DataBundle, t_index: torch.Tensor, horizon: int) -> torc
 
 def inverse_transform(x: np.ndarray, bundle: DataBundle) -> np.ndarray:
     return x * bundle.stds[None, None, :] + bundle.means[None, None, :]
+
+
+def tod_profile_z(bundle, smooth=2):
+    """Per-sensor mean z-score of every time-of-day slot over the TRAIN part only,
+    circularly smoothed over +-smooth slots. Shape [steps_per_day, N]."""
+    slots = int(round(1440 / bundle.interval_min))
+    ts = bundle.timestamps
+    slot = ((ts.hour * 60 + ts.minute) // bundle.interval_min).to_numpy()
+    tr = bundle.splits['train'][1]
+    z = bundle.scaled[:tr].astype(np.float64)
+    prof = np.zeros((slots, z.shape[1]))
+    for k in range(slots):
+        sel = slot[:tr] == k
+        if sel.any():
+            prof[k] = z[sel].mean(0)
+    kern = np.ones(2 * smooth + 1) / (2 * smooth + 1)
+    prof = np.stack([np.convolve(np.r_[prof[-smooth:, j], prof[:, j], prof[:smooth, j]], kern, 'valid')
+                     for j in range(prof.shape[1])], axis=1)
+    return prof.astype(np.float32)
