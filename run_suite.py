@@ -88,9 +88,11 @@ def configs(dataset, groups):
                 runs.append((f'modern/{name}/seed_{s}', [*flags, '--seed', str(s), *base()]))
         for name, flags in {'dcrnn': ['--model', 'dcrnn'], 'dcrnn_res': ['--model', 'dcrnn', '--residual']}.items():
             runs.append((f'modern/{name}/seed_42', [*flags, '--seed', '42', *base()]))
-        for name, flags in {'gwnet': ['--model', 'gwnet'], 'gwnet_res': ['--model', 'gwnet', '--residual']}.items():
-            runs.append((f'modern/{name}/seed_42', [*flags, '--seed', '42', *base(), '--epochs', '60',
-                                                    '--patience', '12']))
+        runs.append(('modern/gwnet/seed_42', ['--model', 'gwnet', '--seed', '42', *base(), '--epochs', '60',
+                                              '--patience', '12']))
+        for s in SEEDS:   # the best neural model on Los-loop -> 3 seeds
+            runs.append((f'modern/gwnet_res/seed_{s}', ['--model', 'gwnet', '--residual', '--seed', str(s), *base(),
+                                                         '--epochs', '60', '--patience', '12']))
     if 'modern_gpu' in groups:    # papers' full sizes; meant for a local GPU (see LOCAL_RUN.md)
         for s in SEEDS:
             for name, flags in {'gwnet_full': ['--model', 'gwnet', '--size', 'full'],
