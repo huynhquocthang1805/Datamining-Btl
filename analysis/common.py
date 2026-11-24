@@ -13,7 +13,7 @@ from tgcn.utility import load_checkpoint
 
 FIG = ROOT / 'reports' / 'figures'; FIG.mkdir(parents=True, exist_ok=True)
 TAB = ROOT / 'reports' / 'tables'; TAB.mkdir(parents=True, exist_ok=True)
-H_DEFAULT = {'losloop': 12, 'sztaxi': 4}
+H_DEFAULT = {'losloop': 12, 'sztaxi': 4, 'metrla': 12, 'pemsbay': 12}
 # horizons reported (minutes) and their step index
 REPORT_MIN = [15, 30, 45, 60]
 

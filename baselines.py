@@ -19,7 +19,7 @@ from tgcn.data import load_bundle
 from tgcn.metrics import horizon_metrics
 from tgcn.utility import ROOT, save_json
 
-DEFAULT_H = {'losloop': 12, 'sztaxi': 4, 'demo': 4}
+DEFAULT_H = {'losloop': 12, 'sztaxi': 4, 'demo': 4, 'metrla': 12, 'pemsbay': 12}
 
 
 def windows(bundle, split, L, H):

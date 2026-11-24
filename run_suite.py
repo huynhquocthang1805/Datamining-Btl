@@ -26,6 +26,8 @@ DATASET_DEFAULTS = {  # 15..60 min ahead; hidden 64 (paper's choice for Los-loop
     'losloop': dict(horizon=12, seq_len=12, hidden=64),
     'sztaxi': dict(horizon=4, seq_len=12, hidden=64),
     'demo': dict(horizon=4, seq_len=12, hidden=16),
+    'metrla': dict(horizon=12, seq_len=12, hidden=64),
+    'pemsbay': dict(horizon=12, seq_len=12, hidden=64),
 }
 RT = ['--residual', '--time-features']
 

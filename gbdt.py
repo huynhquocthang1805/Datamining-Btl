@@ -29,7 +29,7 @@ from tgcn.data import load_bundle, TrafficWindows
 from tgcn.metrics import horizon_metrics, metrics
 from tgcn.utility import ROOT, save_json
 
-DEFAULT_H = {'losloop': 12, 'sztaxi': 4}
+DEFAULT_H = {'losloop': 12, 'sztaxi': 4, 'metrla': 12, 'pemsbay': 12}
 
 
 def neighbour_ops(bundle):
@@ -102,7 +102,7 @@ def build_features(bundle, starts, L, H, p, nb, prof, slot):
     return base, prof_change, z[last]
 
 
-def run(dataset, seed, L=12, H=None, threads=2, out_root=None):
+def run(dataset, seed, L=12, H=None, threads=2, out_root=None, max_train_rows=None):
     H = H or DEFAULT_H[dataset]
     b = load_bundle(ROOT / 'data' / dataset, dataset, L, H)
     p, nb = neighbour_ops(b)
@@ -127,6 +127,9 @@ def run(dataset, seed, L=12, H=None, threads=2, out_root=None):
             yk = (Yz[:, k, :] - zlast).ravel()
             return Xk, yk
         Xtr, ytr = xy('train'); Xva, yva = xy('val')
+        if max_train_rows and len(Xtr) > max_train_rows:      # big datasets (METR-LA, PEMS-BAY)
+            idx = np.random.default_rng(seed + k).choice(len(Xtr), max_train_rows, replace=False)
+            Xtr, ytr = Xtr.iloc[idx], ytr[idx]
         m = lgb.LGBMRegressor(**params)
         m.fit(Xtr, ytr, eval_set=[(Xva, yva)], callbacks=[lgb.early_stopping(100, verbose=False)])
         best_iters.append(int(m.best_iteration_))
@@ -167,9 +170,11 @@ def main():
     ap.add_argument('--dataset', default='losloop', choices=list(DEFAULT_H))
     ap.add_argument('--seeds', nargs='+', type=int, default=[42])
     ap.add_argument('--threads', type=int, default=2)
+    ap.add_argument('--max-train-rows', type=int, default=None,
+                    help='subsample training rows per horizon (e.g. 2000000 for METR-LA/PEMS-BAY)')
     a = ap.parse_args()
     for s in a.seeds:
-        run(a.dataset, s, threads=a.threads)
+        run(a.dataset, s, threads=a.threads, max_train_rows=a.max_train_rows)
 
 
 if __name__ == '__main__':

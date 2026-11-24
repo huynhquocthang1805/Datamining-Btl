@@ -10,6 +10,9 @@ DEFAULTS = {
     'losloop': ('2012-03-01 00:00:00', 5),
     'sztaxi': ('2015-01-01 00:00:00', 15),
     'demo': ('2026-01-01 00:00:00', 15),
+    # larger public benchmarks (prepare with tools/prepare_large_dataset.py, run locally)
+    'metrla': ('2012-03-01 00:00:00', 5),
+    'pemsbay': ('2017-01-01 00:00:00', 5),
 }
 
 @dataclass

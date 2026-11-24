@@ -10,7 +10,7 @@ from tgcn.utility import ROOT,seed_everything,device_for,load_checkpoint,save_js
 
 def build_parser():
     p=argparse.ArgumentParser(description='Traffic forecasting with GRU, T-GCN, T-GCN+')
-    p.add_argument('--dataset',choices=['losloop','sztaxi','demo'],default='losloop')
+    p.add_argument('--dataset',choices=['losloop','sztaxi','demo','metrla','pemsbay'],default='losloop')
     p.add_argument('--data-dir',type=str,default=None)
     p.add_argument('--model',choices=['gru','gcn','tgcn','tgcn_plus','stid','gwnet','dcrnn','staeformer'],
                    default='tgcn')
