@@ -49,6 +49,22 @@ def main():
                           'source_run': str(c.parent.relative_to(ROOT)),
                           'test_RMSE_all_horizons': m['overall']['RMSE'], 'test_MAE_all_horizons': m['overall']['MAE']})
             print('exported', dst.name)
+    # LightGBM (selected by validation): one directory, gzip-compressed boosters
+    import gzip
+    for ds in SINGLE:
+        src = ROOT / 'results' / ds / 'modern' / 'lgbm_best' / 'seed_42' / 'model'
+        if not (src / 'stats.npz').is_file():
+            continue
+        dst = out / f'{ds}_lgbm'; dst.mkdir(exist_ok=True)
+        shutil.copy2(src / 'stats.npz', dst / 'stats.npz')
+        for f in sorted(src.glob('h*.txt')):
+            with open(f, 'rb') as fi, gzip.open(dst / (f.name + '.gz'), 'wb', compresslevel=9) as fo:
+                shutil.copyfileobj(fi, fo)
+        m = json.loads((src.parent / 'metrics.json').read_text())
+        index.append({'file': dst.name + '/', 'role': 'LightGBM v2, 127 leaves (best single model by validation)',
+                      'dataset': ds, 'model': 'lgbm_best', 'source_run': str(src.parent.relative_to(ROOT)),
+                      'test_RMSE_all_horizons': m['overall']['RMSE'], 'test_MAE_all_horizons': m['overall']['MAE']})
+        print('exported', dst.name)
     (out / 'index.json').write_text(json.dumps(index, indent=2, ensure_ascii=False), encoding='utf-8')
 
 

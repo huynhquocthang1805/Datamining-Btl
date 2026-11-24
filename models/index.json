@@ -97,5 +97,14 @@
     "source_run": "results/sztaxi/main/gru/seed_42",
     "test_RMSE_all_horizons": 4.182392149025757,
     "test_MAE_all_horizons": 2.779004005618764
+  },
+  {
+    "file": "losloop_lgbm/",
+    "role": "LightGBM v2, 127 leaves (best single model by validation)",
+    "dataset": "losloop",
+    "model": "lgbm_best",
+    "source_run": "results/losloop/modern/lgbm_best/seed_42",
+    "test_RMSE_all_horizons": 6.466214810131454,
+    "test_MAE_all_horizons": 3.593457687550398
   }
 ]

@@ -827,7 +827,28 @@ python predict.py --checkpoint models/losloop_lgbm --input data/losloop/speed.cs
 
 Quy trình bên trong: đọc 12 mốc gần nhất → chuẩn hóa bằng thống kê train → dựng ~50 đặc trưng (độ trễ, láng giềng qua Â, giờ/thứ, độ lệch so với hồ sơ) → mỗi mô hình h_k dự báo Δ_k → ŷ_{t+k} = x_t + Δ_k → đổi về mph, cắt về ≥ 0. Kết quả dựng lại từ CSV khớp đúng dự báo đã lưu trên test (sai khác ~1e-5 mph).
 
-*(chạy `python tools/export_models.py` trước)*
+```
+LightGBM (12 boosters, one per horizon, features v2) | input ends 2012-03-07 07:30:00
+                    forecast                          actual                                 
+                      773869 767541 767542 717447     773869     767541     767542     717447
+target_time                                                                                  
+2012-03-07 07:35:00     67.6   64.9   23.9   51.9  67.625000  65.750000  18.125000  51.875000
+2012-03-07 07:40:00     67.6   64.7   25.3   52.4  67.444444  66.111111  20.000000  48.333333
+2012-03-07 07:45:00     67.6   65.5   22.2   53.2  68.000000  67.250000  18.125000  46.500000
+2012-03-07 07:50:00     67.5   65.3   23.1   53.3  68.333333  63.888889  20.000000  50.222222
+2012-03-07 07:55:00     67.2   66.1   22.8   53.1  67.875000  67.750000  24.750000  50.000000
+2012-03-07 08:00:00     67.2   65.8   24.5   53.7  68.777778  60.666667  26.666667  51.555556
+2012-03-07 08:05:00     66.9   65.5   24.3   53.8  66.500000  65.750000  20.500000  51.875000
+2012-03-07 08:10:00     66.7   65.7   23.9   54.0  68.500000  65.000000  18.375000  45.625000
+2012-03-07 08:15:00     66.7   65.6   23.2   54.3  66.555556  66.222222  21.777778  51.333333
+2012-03-07 08:20:00     66.4   65.1   27.3   54.2  68.000000  64.875000  21.500000  54.625000
+2012-03-07 08:25:00     66.4   65.0   26.2   54.0  67.333333  66.333333  21.833333  53.500000
+2012-03-07 08:30:00     66.3   65.1   26.7   54.0  67.222222  67.000000  22.555556  53.111111
+```
+
+So với ví dụ cùng thời điểm ở mục 6.2: với cảm biến đang kẹt 767542 (thực tế 18–23 mph), ensemble GRU-RT dự báo "hồi phục" dần lên 38.5 mph sau 1 giờ, còn **LightGBM giữ ở 22–27 mph** — mô hình biết cảm biến này đang ở trong khung giờ thường kẹt (đặc trưng `dev_from_prof`, `prof_change_k`), nên không kéo dự báo về mức thông thoáng. Đây là minh chứng cụ thể cho việc giảm MAE khi kẹt xe ở mục 11.5.
+
+Ensemble/trộn theo tầm không cần mã riêng để dùng: lấy dự báo LightGBM và GRU-RT (`predict.py --checkpoint models/losloop_gru_res_time_seed*.pt`) rồi cộng có trọng số theo bảng mục 11.6.
 
 
 ## 12. Hạn chế và hướng phát triển

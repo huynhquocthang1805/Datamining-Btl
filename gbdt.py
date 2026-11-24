@@ -208,7 +208,14 @@ class GBDTForecaster:
         self.st = {k: z[k] for k in z.files}
         self.H = int(self.st['horizon']); self.L = int(self.st['seq_len'])
         self.version = int(self.st['feature_version'])
-        self.boosters = [lgb.Booster(model_file=str(mdir / f'h{k + 1:02d}.txt')) for k in range(self.H)]
+        def load(k):
+            f = mdir / f'h{k + 1:02d}.txt'
+            if f.is_file():
+                return lgb.Booster(model_file=str(f))
+            import gzip                                     # models/ keeps gzip-compressed copies
+            with gzip.open(str(f) + '.gz', 'rt') as fh:
+                return lgb.Booster(model_str=fh.read())
+        self.boosters = [load(k) for k in range(self.H)]
         self.sensor_ids = [str(x) for x in self.st['sensor_ids']]
         self.interval = int(self.st['interval_min'])
         self._ns = SimpleNamespace
