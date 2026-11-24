@@ -653,7 +653,184 @@ Nhận xét:
 - **Đồ thị lại có ích khi tốc độ biến động mạnh** (MAE 15 phút với |Δ| > 10: T-GCN 8.50, GCN 8.62 so với GRU 9.05, persistence 14.3) — đúng như Los-loop. Trên SZ-taxi không có giờ cao điểm rõ rệt (MAE cao điểm ≈ ngoài cao điểm).
 - Dưới giao thức của tác giả (mục 9.2), GRU tái lập sát bài báo (4.10 so với 4.05), T-GCN sau 150 epoch vẫn chưa hội tụ (4.40 so với 3.92).
 
-## 11. Hạn chế và hướng phát triển
+
+
+## 11. Cải tiến nâng cao: kiến thức và công nghệ mới
+
+### 11.1 Ý tưởng — bốn hướng thử
+
+Sau mục 5, mô hình tốt nhất là ensemble GRU-RT (RMSE 6.91 / MAE 4.01) và điểm yếu chung là giờ cao điểm. Chúng tôi thử thêm bốn hướng, **cùng giao thức nghiêm ngặt** (70/10/20, thống kê chỉ từ train, chọn theo validation, 3 seed):
+
+| Hướng | Mô hình | Ý tưởng chính |
+|---|---|---|
+| A. Kiến trúc hiện đại (2018–2023) | **STID** (Shao et al., 2022) | MLP + embedding "danh tính" của cảm biến, giờ trong ngày, thứ — không đồ thị, không hồi quy |
+| | **DCRNN-lite** (Li et al., 2018 — bài thứ 2 trong Papers.xlsx) | GRU với diffusion convolution hai chiều K = 2, *giữ trọng số riêng cho chính nút* (k = 0) |
+| | **Graph WaveNet** (Wu et al., 2019) | TCN giãn nở có cổng + GCN khuếch tán + đồ thị thích nghi |
+| | **STAEformer** (Liu et al., 2023) | Transformer theo thời gian và theo nút + embedding thích nghi không gian–thời gian |
+| B. Khai phá dữ liệu cổ điển | **LightGBM** + đặc trưng không gian–thời gian | ~50 đặc trưng thiết kế tay: độ trễ, thống kê trượt, trung bình láng giềng (Âx), lịch, **hồ sơ tốc độ theo khung giờ của từng cảm biến** (tính từ train); một mô hình cây tăng cường cho mỗi tầm, dự báo phần thay đổi |
+| C. Chuyển kiến thức B → học sâu | **GRU-RTP**, **T-GCN-RTSP** | thêm hồ sơ theo giờ của cảm biến làm đầu vào và "thay đổi hồ sơ dự kiến tới t+k" vào đầu ra |
+| D. Kết hợp | **Trộn theo từng tầm** | trọng số không âm (tổng 1) cho từng tầm dự báo, **tối ưu trên validation**, rồi mới áp dụng lên test |
+
+STAEformer (83–390 s/epoch trên CPU) và Graph WaveNet cỡ đầy đủ được để chạy trên GPU (`LOCAL_RUN.md`); ở đây Graph WaveNet bản gọn chạy 1 seed.
+
+### 11.2 Kết quả trên Los-loop
+
+| Mô hình | nhóm | seed | tham số | RMSE val | RMSE test | MAE test | 15 phút | 60 phút | phút/run |
+|---|---|---|---|---|---|---|---|---|---|
+| Trộn theo tầm: LightGBM v2, 127 lá (chọn theo val) + T-GCN-RTSP (+ hồ sơ giờ) + GRU-RTP (+ hồ sơ giờ) + GRU-RT | ensemble | 3 | — | — | 6.286 | 3.575 | 5.46 / 3.15 | 7.35 / 4.25 | — |
+| Ensemble LightGBM v2, 127 lá (chọn theo val) (3 seed) | ensemble | 3 | — | — | 6.438 | 3.578 | 5.63 / 3.17 | 7.46 / 4.21 | — |
+| Ensemble LightGBM + GRU-RTP (+ hồ sơ giờ) | ensemble | 3 | — | — | 6.452 | 3.726 | 5.65 / 3.30 | 7.49 / 4.41 | — |
+| LightGBM v2, 127 lá (chọn theo val) | khai phá dữ liệu | 3 | — | 5.339 | 6.467 ± 0.000 | 3.595 ± 0.005 | 5.66 / 3.19 | 7.48 / 4.22 | 5 |
+| LightGBM (đặc trưng KG-TG) | khai phá dữ liệu | 3 | — | 5.353 | 6.477 ± 0.020 | 3.618 ± 0.015 | 5.66 / 3.20 | 7.49 / 4.24 | 4 |
+| LightGBM v2 (+ bất thường láng giềng/toàn mạng) | khai phá dữ liệu | 1 | — | 5.348 | 6.481 | 3.613 | 5.67 / 3.20 | 7.54 / 4.27 | 6 |
+| T-GCN-RTSP (+ hồ sơ giờ) | hồ sơ giờ | 3 | 27,996 | 5.664 | 6.685 ± 0.026 | 4.100 ± 0.091 | 5.81 / 3.54 | 7.82 / 4.96 | 20 |
+| Ensemble GRU-RTP (+ hồ sơ giờ) (3 seed) | ensemble | 3 | — | — | 6.809 | 4.034 | 5.97 / 3.55 | 7.93 / 4.81 | — |
+| GRU-RTP (+ hồ sơ giờ) | hồ sơ giờ | 3 | 14,748 | 5.652 | 6.829 ± 0.006 | 4.054 ± 0.054 | 5.99 / 3.57 | 7.95 / 4.83 | 18 |
+| Ensemble GRU-RT (3 seed) | ensemble | 3 | — | — | 6.911 | 4.012 | 5.80 / 3.38 | 8.29 / 4.97 | — |
+| GRU-RT | phần 1 | 3 | 14,412 | 5.906 | 6.981 ± 0.063 | 4.065 ± 0.063 | 5.84 / 3.43 | 8.39 / 5.04 | 13 |
+| T-GCN-RTS | phần 1 | 3 | 27,468 | 5.937 | 7.219 ± 0.054 | 4.156 ± 0.052 | 5.93 / 3.50 | 8.75 / 5.11 | 13 |
+| T-GCN tách self | phần 1 | 3 | 25,932 | 6.091 | 7.295 ± 0.060 | 4.124 ± 0.019 | 5.83 / 3.35 | 9.00 / 5.24 | 27 |
+| T-GCN-RT | phần 1 | 3 | 14,220 | 6.158 | 7.375 ± 0.043 | 4.325 ± 0.029 | 6.10 / 3.60 | 8.89 / 5.37 | 12 |
+| STID | hiện đại | 3 | 117,100 | 5.852 | 7.427 ± 0.205 | 4.156 ± 0.126 | 6.15 / 3.51 | 8.81 / 5.01 | 3 |
+| STID + residual | hiện đại | 3 | 117,100 | 5.797 | 7.477 ± 0.220 | 4.169 ± 0.090 | 6.32 / 3.56 | 8.79 / 5.08 | 4 |
+| GRU | paper | 3 | 13,644 | 6.194 | 7.495 ± 0.006 | 4.175 ± 0.023 | 6.00 / 3.36 | 9.32 / 5.38 | 30 |
+| T-GCN | paper | 3 | 13,452 | 6.284 | 7.516 ± 0.031 | 4.371 ± 0.037 | 6.16 / 3.67 | 9.13 / 5.39 | 24 |
+| DCRNN-lite + residual | hiện đại | 1 | 67,212 | 5.982 | 7.560 | 4.387 | 6.12 / 3.63 | 9.19 / 5.44 | 50 |
+| DCRNN-lite | hiện đại | 1 | 67,212 | 5.864 | 7.863 | 4.562 | 6.19 / 3.81 | 9.64 / 5.58 | 51 |
+| Hồi quy tuyến tính | baseline | 1 | — | — | 7.944 | 4.514 | 6.30 / 3.61 | 9.90 / 5.84 | — |
+| Persistence | baseline | 1 | — | — | 8.418 | 4.408 | 6.45 / 3.56 | 10.85 / 5.77 | — |
+
+*RMSE / MAE trung bình 12 tầm; "15 phút", "60 phút" = RMSE / MAE tại đúng bước đó; thời gian train trên 1 nhân CPU, có tranh chấp.*
+
+![Hình 20. Xếp hạng mọi mô hình trên cùng tập test Los-loop](figures/modern_ranking_losloop.png)
+
+![Hình 21. Sai số theo tầm dự báo của các mô hình mới](figures/modern_horizon_losloop.png)
+
+Kiểm định cặp so với mô hình tốt nhất của phần trước (ensemble GRU-RT), bootstrap khối 1 giờ + Diebold–Mariano:
+
+| A | B | ΔRMSE (A−B) | KTC 95% | DM p | Kết luận |
+|---|---|---|---|---|---|
+| DCRNN-lite | ensemble GRU-RT | +0.952 | [+0.469; +1.490] | 0.0029 | B tốt hơn |
+| DCRNN-lite + residual | ensemble GRU-RT | +0.650 | [+0.383; +0.966] | 0.0003 | B tốt hơn |
+| GRU-RTP (+ hồ sơ giờ) (TB 3 seed) | ensemble GRU-RT | -0.101 | [-0.450; +0.215] | 0.5646 | không khác biệt |
+| LightGBM (đặc trưng KG-TG) (TB 3 seed) | ensemble GRU-RT | -0.461 | [-0.906; -0.107] | 0.0344 | A tốt hơn |
+| LightGBM v2, 127 lá (chọn theo val) (TB 3 seed) | ensemble GRU-RT | -0.473 | [-0.935; -0.102] | 0.0337 | A tốt hơn |
+| STID (TB 3 seed) | ensemble GRU-RT | +0.323 | [+0.095; +0.572] | 0.0163 | B tốt hơn |
+| STID + residual (TB 3 seed) | ensemble GRU-RT | +0.385 | [+0.081; +0.728] | 0.0367 | B tốt hơn |
+| T-GCN-RTSP (+ hồ sơ giờ) (TB 3 seed) | ensemble GRU-RT | -0.307 | [-0.640; -0.018] | 0.0793 | không khác biệt |
+| Ensemble LightGBM v2, 127 lá (chọn theo val) (3 seed) | ensemble GRU-RT | -0.473 | [-0.924; -0.099] | 0.0337 | A tốt hơn |
+| Ensemble LightGBM + GRU-RTP (+ hồ sơ giờ) | ensemble GRU-RT | -0.458 | [-0.861; -0.117] | 0.0255 | A tốt hơn |
+| Trộn theo tầm (fit trên val) | ensemble GRU-RT | -0.625 | [-0.974; -0.337] | 0.0010 | A tốt hơn |
+| GRU-RTP (3 seed) | GRU-RT (3 seed) | -0.101 | [-0.450; +0.195] | 0.5646 | không khác biệt |
+
+Ba kết luận:
+
+1. **Mô hình tốt nhất mới là trộn theo tầm (RMSE 6.29 / MAE 3.58)** — giảm 9% RMSE so với ensemble GRU-RT (p = 0.001), **16% so với GRU và T-GCN gốc**. LightGBM một mình (6.47 / 3.60) đã hơn mọi mô hình học sâu (p = 0.03 so với ensemble GRU-RT) và cực kỳ ổn định giữa các seed (± 0.001).
+2. **Kiến trúc hiện đại "nguyên bản" không thắng trên Los-loop**: STID 7.43 ± 0.21, DCRNN-lite 7.56–7.86 — kém cả ensemble GRU-RT có ý nghĩa thống kê.
+3. **Đưa hồ sơ theo giờ vào mạng nơ-ron giúp ở tầm xa** (GRU-RTP 60 phút: 7.95 so với 8.39 của GRU-RT; T-GCN-RTSP là mô hình học sâu tốt nhất, 6.69) nhưng làm tệ đi ở 5 phút và **chưa có ý nghĩa thống kê** so với GRU-RT (p = 0.56 và 0.08).
+
+### 11.3 Phản biện — vì sao các mô hình SOTA không thắng ở đây
+
+Các kiến trúc này được thiết kế và báo cáo trên METR-LA/PEMS-BAY (4–6 tháng). Los-loop chỉ có **5 ngày train** ≈ 1 400 cửa sổ:
+
+- **Số tham số so với dữ liệu:** STID 117 nghìn, DCRNN-lite 67 nghìn, Graph WaveNet 166 nghìn so với 13–14 nghìn của GRU/T-GCN. Embedding thời gian của STID có 288 khung giờ × 32 chiều nhưng mỗi khung chỉ được thấy ~5 lần.
+- **Dấu hiệu quá khớp đo được:** epoch tốt nhất của STID là 4–11, DCRNN-lite 25–27, GRU-RTP 6–11, T-GCN-RTSP 6–11 (GRU-RT: 19–37; GRU: 87–101), và độ lệch giữa các seed của STID lớn gấp 30 lần GRU (0.21 so với 0.006).
+- **Kết luận đúng là "chưa kiểm chứng được trên dữ liệu đủ lớn", không phải "SOTA kém"**: với METR-LA, Graph WaveNet/STAEformer giảm MAE 60 phút từ ~3.60 (DCRNN) xuống ~3.3–3.5. `tools/prepare_large_dataset.py` + `LOCAL_RUN.md` cho phép chạy lại toàn bộ trên các bộ đó.
+- Ngược lại, LightGBM có **dừng sớm riêng cho từng tầm** (số cây tốt nhất giảm từ vài trăm ở 5 phút xuống ~60 ở 60 phút) và cây quyết định khó học thuộc nhiễu hơn — đúng thứ dữ liệu nhỏ cần.
+
+### 11.4 Minh chứng — LightGBM dựa vào thông tin gì? (ảnh hưởng của thuộc tính)
+
+![Hình 22. Đặc trưng quan trọng nhất (trái) và tỉ trọng từng nhóm thông tin theo tầm dự báo (phải)](figures/lgbm_importance_losloop.png)
+
+Tỉ trọng gain theo nhóm thông tin (trung bình 3 seed):
+
+| Tầm | lịch sử chính nút | láng giềng (đồ thị) | trạng thái toàn mạng | lịch (giờ, thứ) | hồ sơ theo giờ của cảm biến | đặc tính cảm biến |
+|---|---|---|---|---|---|---|
+| 5 phút | 24.3% | 11.3% | 2.0% | 4.6% | 48.5% | 9.3% |
+| 15 phút | 21.2% | 20.3% | 2.6% | 3.4% | 48.4% | 4.0% |
+| 30 phút | 14.5% | 17.4% | 4.5% | 4.8% | 55.0% | 3.8% |
+| 45 phút | 11.8% | 14.5% | 4.8% | 5.8% | 59.6% | 3.5% |
+| 60 phút | 11.5% | 10.8% | 4.1% | 5.7% | 65.4% | 2.4% |
+
+- **Hồ sơ theo giờ của chính cảm biến là nguồn thông tin số một** (~50% gain ở 5 phút, ~65% ở 60 phút): độ lệch hiện tại so với hồ sơ (`dev_from_prof`, "đang chậm/nhanh bất thường bao nhiêu") và thay đổi hồ sơ dự kiến tới t+k (`prof_change_k`, "sắp vào/ra giờ cao điểm"). Đây chính là thông tin mô hình học sâu thiếu: sin/cos của giờ cho biết *bây giờ là mấy giờ*, nhưng không cho biết *cảm biến này thường kẹt lúc mấy giờ*.
+- **Láng giềng (đồ thị) đóng góp ~11–21%, đạt đỉnh ở tầm 15–25 phút** — khớp với kết quả mục 5 rằng đồ thị có ích nhất ở tầm trung/xa và khi biến động mạnh; ở 5 phút lịch sử của chính nút áp đảo.
+- **Trạng thái toàn mạng và bất thường láng giềng (v2) thêm rất ít** (RMSE validation 5.352 → 5.348): thông tin đã nằm trong hồ sơ.
+- **Siêu tham số gần như không quan trọng** — mọi cấu hình nằm trong 0.03 RMSE validation:
+
+| Cấu hình LightGBM (seed 42) | RMSE val | RMSE test | MAE test |
+|---|---|---|---|
+| v1, 63 lá, lr 0.05 | 5.352 | 6.493 | 3.635 |
+| v2, 63 lá, lr 0.05 | 5.348 | 6.481 | 3.613 |
+| v2, 31 lá | 5.369 | 6.485 | 3.624 |
+| v2, 127 lá | 5.341 | 6.466 | 3.593 |
+| v2, lr 0.03 | 5.343 | 6.467 | 3.604 |
+
+### 11.5 Giờ cao điểm: điểm yếu đã được khắc phục
+
+**MAE – dự báo trước 15 phút**
+
+| Mô hình | tất cả | cao điểm | ngoài cao điểm | kẹt xe (v<40) | biến động mạnh (Δ>10) |
+|---|---|---|---|---|---|
+| Persistence | 3.562 | 4.203 | 3.355 | 6.95 | 18.621 |
+| GRU-RT (TB 3 seed) | 3.383 | 4.504 | 3.021 | 7.551 | 14.511 |
+| GRU-RTP (TB 3 seed) | 3.551 | 4.751 | 3.163 | 8.222 | 13.148 |
+| LightGBM (TB 3 seed) | 3.168 | 4.153 | 2.85 | 6.811 | 13.175 |
+| Trộn theo tầm | 3.146 | 4.115 | 2.833 | 6.823 | 13.528 |
+
+**MAE – dự báo trước 60 phút**
+
+| Mô hình | tất cả | cao điểm | ngoài cao điểm | kẹt xe (v<40) | biến động mạnh (Δ>10) |
+|---|---|---|---|---|---|
+| Persistence | 5.765 | 7.441 | 5.223 | 13.58 | 24.286 |
+| GRU-RT (TB 3 seed) | 4.972 | 8.018 | 3.987 | 13.259 | 14.896 |
+| GRU-RTP (TB 3 seed) | 4.812 | 7.237 | 4.029 | 13.168 | 12.959 |
+| LightGBM (TB 3 seed) | 4.209 | 5.994 | 3.632 | 10.42 | 12.832 |
+| Trộn theo tầm | 4.247 | 6.243 | 3.601 | 10.778 | 13.1 |
+
+- Lần đầu tiên có mô hình **thắng persistence trong giờ cao điểm ở 15 phút** (LightGBM 4.15, trộn 4.12 so với 4.20) và thắng rất xa ở 60 phút (LightGBM 5.99 so với 7.44 — giảm 19%; GRU-RT 8.02).
+- Khi kẹt xe (v < 40 mph), MAE 60 phút giảm từ 13.3 (GRU-RT) xuống 10.4 (LightGBM): mô hình biết rằng cảm biến *đang trong khung giờ thường kẹt* nên không vội dự báo "sắp thông".
+
+### 11.6 Trộn theo tầm — vì sao các thành viên "kém hơn" vẫn có ích
+
+![Hình 23. Trọng số trộn theo tầm dự báo (fit trên validation)](figures/blend_weights_losloop.png)
+
+| Tầm | lgbm_best | T-GCN-RTSP | GRU-RTP | GRU-RT |
+|---|---|---|---|---|
+| 5 phút | 0.65 | 0.0 | 0.0 | 0.35 |
+| 15 phút | 0.55 | 0.05 | 0.0 | 0.4 |
+| 30 phút | 0.65 | 0.0 | 0.0 | 0.35 |
+| 45 phút | 0.7 | 0.0 | 0.0 | 0.3 |
+| 60 phút | 0.75 | 0.0 | 0.0 | 0.25 |
+
+Trọng số tối ưu trên validation: LightGBM tăng dần theo tầm (0.55 → 0.75), GRU-RT giảm dần (0.35 → 0.25); **GRU-RTP và T-GCN-RTSP — dù tốt hơn GRU-RT khi đứng một mình — nhận trọng số 0**, vì chúng dùng cùng thông tin hồ sơ như LightGBM nên sai số trùng nhau. Ensemble cần thành viên *đa dạng*, không cần thành viên mạnh nhất. Đây cũng là lý do ensemble LightGBM + GRU-RTP chia đều (6.45) kém hơn trộn có trọng số (6.29).
+
+So với bài báo (cách tính gộp của tác giả): trộn theo tầm đạt "15 phút" RMSE 4.81 / MAE 2.80 / Accuracy 0.918 / R² 0.880 và "60 phút" 6.29 / 3.57 / 0.893 / 0.794 — so với T-GCN trong bài báo 5.13 / 3.18 / 0.913 / 0.863 và 7.27 / 4.60 / 0.876 / 0.728 (giảm 6% và 14% RMSE, 12% và 22% MAE), dù giao thức chặt hơn.
+
+### 11.7 SZ-taxi
+
+SZ_MODERN_SECTION
+
+### 11.8 Mô hình cuối cùng mới và cách đọc lên để dự báo
+
+Theo validation, **LightGBM (v2, 127 lá) là mô hình đơn tốt nhất** và **trộn theo tầm LightGBM + GRU-RT là dự báo cuối cùng** cho Los-loop. Mô hình LightGBM là một thư mục:
+
+| Tệp | Nội dung |
+|---|---|
+| `model/h01.txt … h12.txt` | 12 mô hình cây tăng cường (một cho mỗi tầm 5…60 phút), định dạng văn bản của LightGBM |
+| `model/stats.npz` | trung bình/độ lệch chuẩn train của từng cảm biến, ma trận kề chuẩn hóa, **hồ sơ theo giờ** [288 × 207], danh sách cảm biến, bước thời gian, phiên bản đặc trưng |
+
+Đọc lên và dự báo (cùng lệnh `predict.py`, truyền thư mục thay vì tệp `.pt`):
+
+```bash
+python predict.py --checkpoint models/losloop_lgbm --input data/losloop/speed.csv --end-time "2012-03-07 07:30" --compare --sensors 4
+```
+
+Quy trình bên trong: đọc 12 mốc gần nhất → chuẩn hóa bằng thống kê train → dựng ~50 đặc trưng (độ trễ, láng giềng qua Â, giờ/thứ, độ lệch so với hồ sơ) → mỗi mô hình h_k dự báo Δ_k → ŷ_{t+k} = x_t + Δ_k → đổi về mph, cắt về ≥ 0. Kết quả dựng lại từ CSV khớp đúng dự báo đã lưu trên test (sai khác ~1e-5 mph).
+
+*(chạy `python tools/export_models.py` trước)*
+
+
+## 12. Hạn chế và hướng phát triển
 
 **Hạn chế của nghiên cứu này**
 
@@ -670,7 +847,7 @@ Nhận xét:
 5. **Dữ liệu dài hơn:** với ≥ 1 tháng dữ liệu, đặc trưng thời gian và đồ thị thích nghi có cơ hội phát huy (hiện bị quá khớp).
 6. **Điền giá trị thiếu ở đầu vào** (SZ-taxi: số 0 = không có taxi) bằng trung bình láng giềng hoặc hồ sơ theo giờ, thay vì chỉ bỏ qua chúng trong loss (đã thử, không cải thiện).
 
-## 12. Kết luận
+## 13. Kết luận
 
 Chúng tôi đã cài đặt lại và chạy GRU, GCN, T-GCN cùng 4 baseline cổ điển trên Los-loop và SZ-taxi với cùng dữ liệu, cùng cách chia và 3 seed (≈ 60 run). **GRU tái lập đúng bài báo; T-GCN thì không vượt được GRU** một cách có ý nghĩa trên cả hai bộ dữ liệu — chính Bảng 1 của bài báo cũng cho thấy MAE của GRU tốt hơn. Nguyên nhân cơ chế là phép chuẩn hóa D^(-1/2)(A+I)D^(-1/2) chỉ để lại ~30% trọng số cho tín hiệu của chính nút, làm hỏng dự báo tầm ngắn; bằng chứng đến từ bốn hướng độc lập (thí nghiệm liều–đáp ứng với self-loop, permutation importance, gradient saliency và việc sửa đúng chỗ đó — tách self/láng giềng — làm T-GCN vượt GRU có ý nghĩa thống kê). Con số của bài báo còn được "làm đẹp" bởi việc chọn epoch theo test, cách gộp tầm dự báo và baseline yếu (thiếu persistence; HA trên SZ-taxi yếu gần gấp đôi một trung bình trượt) — trong khi persistence lại là mô hình tốt nhất trong giờ cao điểm.
 

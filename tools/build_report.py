@@ -17,7 +17,7 @@ from tgcn.plotstyle import label
 REP = ROOT / 'reports'; TAB = REP / 'tables'
 SRC = REP / 'src'   # hand-written text; numeric tables are filled in from reports/tables/*.csv
 PARTS = ['part0.md', 'part1.md', 'part2.md', 'part_critique.md',
-         'part3.md', 'part_model.md', 'part4.md', 'part5.md', 'part6.md']
+         'part3.md', 'part_model.md', 'part4.md', 'part5.md', 'part6.md', 'part8_modern.md', 'part9_end.md']
 SECTION_ORDER = None
 
 
@@ -245,7 +245,89 @@ def final_table():
     return md(pd.DataFrame(rows))
 
 
-FILL = {'FINAL_TABLE': final_table, 'ORACLE_TABLE': oracle_table, 'PAPER_PROTOCOL_TABLE': paper_protocol_table,'PEAK_TABLE': peak_table, 'ABLATION_TABLE': ablation_table, 'TUNING_TABLE': tuning_table,
+def modern_table(ds='losloop'):
+    f = TAB / f'modern_results_{ds}.csv'
+    df = pd.read_csv(f)
+    sd = lambda m, s_: f'{m:.3f}' if pd.isna(s_) else f'{m:.3f} ± {s_:.3f}'
+    t = pd.DataFrame({'Mô hình': df['Mô hình'], 'nhóm': df['nhóm'], 'seed': df.seed,
+                      'tham số': df['tham số'].map(lambda v: '—' if pd.isna(v) else f'{int(v):,}'),
+                      'RMSE val': df['RMSE val'].map(lambda v: '—' if pd.isna(v) else f'{v:.3f}'),
+                      'RMSE test': [sd(a, b) for a, b in zip(df.RMSE, df.RMSE_sd)],
+                      'MAE test': [sd(a, b) for a, b in zip(df.MAE, df.MAE_sd)],
+                      '15 phút': [f'{a:.2f} / {b:.2f}' for a, b in zip(df['RMSE 15'], df['MAE 15'])],
+                      '60 phút': [f'{a:.2f} / {b:.2f}' for a, b in zip(df['RMSE 60'], df['MAE 60'])],
+                      'phút/run': df['phút train/run'].map(lambda v: '—' if pd.isna(v) else f'{v:.0f}')})
+    return md(t) + '\n\n*RMSE / MAE trung bình 12 tầm; "15 phút", "60 phút" = RMSE / MAE tại đúng bước đó; thời gian train trên 1 nhân CPU, có tranh chấp.*'
+
+
+def modern_tests(ds='losloop'):
+    df = pd.read_csv(TAB / f'modern_tests_{ds}.csv')
+    df = df[~df.A.str.startswith('Ensemble GRU-RTP')]
+    t = pd.DataFrame({'A': df.A, 'B': df.B, 'ΔRMSE (A−B)': df['ΔRMSE (A−B)'].map(lambda v: f'{v:+.3f}'),
+                      'KTC 95%': [f'[{a:+.3f}; {b:+.3f}]' for a, b in zip(df.CI95_low, df.CI95_high)],
+                      'DM p': df.DM_p.map(lambda v: f'{v:.4f}' if v >= 1e-4 else '< 0.0001'),
+                      'Kết luận': [('A tốt hơn' if d < 0 else 'B tốt hơn') if p < 0.05 else 'không khác biệt'
+                                   for d, p in zip(df['ΔRMSE (A−B)'], df.DM_p)]})
+    return md(t)
+
+
+def modern_subsets(ds='losloop'):
+    df = pd.read_csv(TAB / f'modern_subsets_{ds}.csv')
+    names = {'naive': 'Persistence', 'gru_res_time': 'GRU-RT (TB 3 seed)', 'gru_rtp': 'GRU-RTP (TB 3 seed)',
+             'lgbm_best': 'LightGBM (TB 3 seed)', 'lgbm': 'LightGBM (TB 3 seed)', 'blend': 'Trộn theo tầm'}
+    out = []
+    for h in ('15 phút', '60 phút'):
+        pv = df[df.horizon == h].pivot_table(index='model', columns='subset', values='MAE', sort=False)
+        pv.index = [names.get(i, i) for i in pv.index]; pv.index.name = 'Mô hình'
+        out.append(f'**MAE – dự báo trước {h}**\n\n' + md(pv.round(3), index=True))
+    return '\n\n'.join(out)
+
+
+def lgbm_groups(ds='losloop'):
+    g = pd.read_csv(TAB / f'lgbm_importance_groups_{ds}.csv', index_col=0)
+    g = g.loc[[i for i in g.index if i in (5, 15, 30, 60, 45)]] if ds == 'losloop' else g
+    g.index = [f'{i} phút' for i in g.index]; g.index.name = 'Tầm'
+    return md((100 * g).round(1).astype(str).apply(lambda c: c + '%'), index=True)
+
+
+def lgbm_tuning(ds='losloop'):
+    return md(pd.read_csv(TAB / f'lgbm_tuning_{ds}.csv'))
+
+
+def blend_weights(ds='losloop'):
+    w = pd.read_csv(TAB / f'blend_weights_{ds}.csv', index_col=0)
+    if len(w) > 4:
+        w = w.loc[[i for i in w.index if i in ('5 phút', '15 phút', '30 phút', '45 phút', '60 phút')]]
+    w.index.name = 'Tầm'
+    return md(w.round(2), index=True)
+
+
+def paper_style_blend():
+    m = json.loads((ROOT / 'results/losloop/ensemble/blend/metrics.json').read_text())
+    c15, c60 = m['cumulative']['15min'], m['cumulative']['60min']
+    return (f"\"15 phút\" RMSE {c15['RMSE']:.2f} / MAE {c15['MAE']:.2f} / Accuracy {c15['Accuracy']:.3f} / R² {c15['R2']:.3f} "
+            f"và \"60 phút\" {c60['RMSE']:.2f} / {c60['MAE']:.2f} / {c60['Accuracy']:.3f} / {c60['R2']:.3f} — so với T-GCN "
+            f"trong bài báo 5.13 / 3.18 / 0.913 / 0.863 và 7.27 / 4.60 / 0.876 / 0.728 (giảm "
+            f"{100 * (1 - c15['RMSE'] / 5.1264):.0f}% và {100 * (1 - c60['RMSE'] / 7.2677):.0f}% RMSE, "
+            f"{100 * (1 - c15['MAE'] / 3.1802):.0f}% và {100 * (1 - c60['MAE'] / 4.6021):.0f}% MAE), dù giao thức chặt hơn")
+
+
+def predict_gbdt_example():
+    d = ROOT / 'models' / 'losloop_lgbm'
+    if not d.is_dir():
+        return '*(chạy `python tools/export_models.py` trước)*'
+    out = subprocess.run([sys.executable, str(ROOT / 'predict.py'), '--checkpoint', str(d), '--input',
+                          str(ROOT / 'data/losloop/speed.csv'), '--end-time', '2012-03-07 07:30', '--compare',
+                          '--sensors', '4'], capture_output=True, text=True, cwd=ROOT,
+                         env={**__import__('os').environ, 'TGCN_THREADS': '1'}).stdout
+    return '```\n' + out.strip() + '\n```'
+
+
+FILL = {'MODERN_TABLE': modern_table, 'MODERN_TESTS': modern_tests, 'MODERN_SUBSETS': modern_subsets,
+        'LGBM_GROUPS': lgbm_groups, 'LGBM_TUNING': lgbm_tuning, 'BLEND_WEIGHTS': blend_weights,
+        'PREDICT_GBDT_EXAMPLE': predict_gbdt_example,
+        'SZ_MODERN_TABLE': lambda: modern_table('sztaxi'),
+        'FINAL_TABLE': final_table, 'ORACLE_TABLE': oracle_table, 'PAPER_PROTOCOL_TABLE': paper_protocol_table,'PEAK_TABLE': peak_table, 'ABLATION_TABLE': ablation_table, 'TUNING_TABLE': tuning_table,
         'MAIN_TABLE': main_table, 'FI_TABLE': fi_table, 'SEED_TABLE': seed_table,
         'PAIRWISE_TABLE': pairwise_table, 'CONFORMAL_TABLE': conformal_table, 'PAPER_TABLE': paper_table,
         'MODEL_CARD_TABLE': model_card, 'PREDICT_EXAMPLE': predict_example,
@@ -260,12 +342,17 @@ def main():
                 text = re.sub(rf'^{key}$', lambda _: fn(), text, flags=re.M)
             except FileNotFoundError as e:
                 print('missing table for', key, e)
+    if 'PAPER_STYLE_BLEND' in text:
+        try:
+            text = text.replace('PAPER_STYLE_BLEND', paper_style_blend())
+        except FileNotFoundError:
+            pass
     try:
         mean_b, max_b = oracle_stats()
         text = text.replace('ORACLE_MEAN%', f'{mean_b:.2f}%').replace('ORACLE_MAX%', f'{max_b:.2f}%')
     except FileNotFoundError:
         pass
-    left = sorted(set(re.findall(r'^[A-Z_]{6,}$', text, flags=re.M)) | set(re.findall(r'[A-Z]{4,}_[A-Z_]{3,}', text)))
+    left = sorted(set(re.findall(r'^[A-Z_]{6,}$', text, flags=re.M)) | set(re.findall(r'(?<![\w/])[A-Z]{2,}_[A-Z_]{3,}(?![\w.])', text)))
     if left:
         print('UNFILLED placeholders:', left)
     (REP / 'BAO_CAO_TGCN.md').write_text(text, encoding='utf-8')
