@@ -15,11 +15,18 @@ Cài đặt PyTorch độc lập của GRU, GCN, T-GCN (Zhao et al., 2019) và c
 | Persistence (giữ giá trị cuối) | 8.42 | 4.41 | baseline bài báo không có |
 | GRU | 7.50 ± 0.01 | 4.18 ± 0.02 | tái lập đúng bài báo ("15 phút": 5.217 so với 5.218) |
 | T-GCN (Â đúng như mã tác giả) | 7.52 ± 0.03 | 4.37 ± 0.04 | **không hơn GRU** (p = 0.76) |
-| T-GCN tách self/láng giềng `[x, Âx]W` | 7.30 ± 0.06 | 4.12 ± 0.02 | **hơn GRU có ý nghĩa** (p = 0.01) |
-| GRU-RT (residual + giờ/thứ) | 6.98 ± 0.06 | 4.07 ± 0.06 | chọn theo validation |
-| **Ensemble 3 seed GRU-RT (mô hình cuối)** | **6.91** | **4.01** | "15 phút" 5.09 / 3.01 < bài báo T-GCN 5.13 / 3.18 |
+| T-GCN tách self/láng giềng `[x, Âx]W` | 7.30 ± 0.06 | 4.12 ± 0.02 | hơn GRU có ý nghĩa (p = 0.01) |
+| STID / DCRNN-lite (kiến trúc 2018–2022) | 7.43 / 7.56 | 4.16 / 4.39 | quá khớp trên 5 ngày dữ liệu |
+| GRU-RT (residual + giờ/thứ), ensemble 3 seed | 6.91 | 4.01 | mô hình tốt nhất phần 1 |
+| T-GCN-RTSP (+ hồ sơ theo giờ của cảm biến) | 6.69 ± 0.03 | 4.10 ± 0.09 | mạng nơ-ron tốt nhất |
+| **LightGBM + đặc trưng không gian–thời gian** | **6.47 ± 0.00** | **3.60** | mô hình đơn tốt nhất |
+| **Trộn LightGBM + GRU-RT theo tầm (trọng số fit trên validation)** | **6.29** | **3.58** | **tốt nhất: −16% so với T-GCN gốc** |
 
-Phát hiện chính: phép chuẩn hóa D^(-1/2)(A+I)D^(-1/2) của T-GCN chỉ giữ ~30% tín hiệu của chính nút ⇒ dự báo tầm ngắn kém cả persistence; bài báo chọn epoch theo tập test, gộp sai số các tầm, thiếu baseline persistence và có MAE của GRU tốt hơn T-GCN ở cả 8 ô của Bảng 1; trong giờ cao điểm persistence vẫn tốt nhất theo MAE. Chi tiết, kiểm định thống kê và hình trong báo cáo.
+Phát hiện chính:
+- Phép chuẩn hóa ma trận kề của T-GCN chỉ giữ ~30% tín hiệu của chính nút ⇒ dự báo tầm ngắn kém cả persistence.
+- Bài báo chọn epoch theo tập test, gộp sai số các tầm, thiếu baseline persistence, và MAE của GRU tốt hơn T-GCN ở cả 8 ô của Bảng 1.
+- Đặc trưng quan trọng nhất là **hồ sơ tốc độ theo khung giờ của từng cảm biến** (50–65% tầm quan trọng trong LightGBM). Nhờ nó, lần đầu có mô hình thắng persistence trong giờ cao điểm.
+- Kiến trúc hiện đại cần dữ liệu lớn hơn để phát huy — xem [`LOCAL_RUN.md`](LOCAL_RUN.md) để chạy trên GPU và METR-LA / PEMS-BAY.
 
 ## 1. Cài đặt
 
@@ -74,6 +81,17 @@ python train.py --dataset losloop --model tgcn --self-sep --residual --time-feat
 
 Tùy chọn của `train.py`: `--model {gru,gcn,tgcn,tgcn_plus}`, `--residual`, `--time-features`, `--self-sep`, `--no-graph`, `--adaptive-graph`, `--loss {mse,huber,mae}`, `--raw-loss`, `--mask-zero`, `--normalization {zscore,max}`, `--protocol {strict,paper}`, `--track-test` (chỉ ghi RMSE test theo epoch để đo độ lạc quan, không dùng để chọn).
 
+### Cải tiến nâng cao (mục 11 của báo cáo)
+
+```bash
+python run_suite.py --spec losloop:modern --jobs 4          # STID, DCRNN-lite, GRU-RTP, T-GCN-RTSP, Graph WaveNet (gọn)
+python gbdt.py --dataset losloop --features 2 --num-leaves 127 --tag lgbm_best --seeds 42 123 2026
+python analysis/blend.py --dataset losloop --members lgbm_best tgcn_rtsp gru_rtp gru_res_time
+python analysis/modern_models.py --dataset losloop
+```
+
+Các cấu hình nặng (STAEformer, Graph WaveNet cỡ đầy đủ, METR-LA/PEMS-BAY): xem [`LOCAL_RUN.md`](LOCAL_RUN.md).
+
 ## 5. Phân tích và báo cáo
 
 ```bash
@@ -100,13 +118,21 @@ python predict.py --checkpoint models/losloop_gru_res_time_seed*.pt --input data
 
 Checkpoint tự chứa trọng số, cấu hình và thống kê chuẩn hóa của train; truyền nhiều checkpoint để lấy trung bình (ensemble); dự báo được cắt về ≥ 0. `models/index.json` mô tả từng tệp.
 
+Mô hình LightGBM (thư mục gồm 12 mô hình cây — một cho mỗi tầm — và `stats.npz`):
+
+```bash
+python predict.py --checkpoint models/losloop_lgbm --input data/losloop/speed.csv --end-time "2012-03-07 07:30" --compare
+```
+
 ## 7. Cấu trúc
 
 ```
-tgcn/            data.py (chuẩn hóa, Â như mã tác giả, cửa sổ, --protocol paper) · models.py · training.py · metrics.py · plotstyle.py
-baselines.py     train.py · evaluate.py · predict.py · run_suite.py
-analysis/        eda · compare_models · peak_hours · tuning_ablation · feature_importance · explain · reliability · paper_protocol
-tools/           export_models · build_report · md2docx
+tgcn/            data.py · models.py (GRU, GCN, T-GCN) · models_modern.py (STID, Graph WaveNet, DCRNN-lite, STAEformer)
+                 training.py · metrics.py · plotstyle.py
+baselines.py     gbdt.py (LightGBM) · train.py · evaluate.py · predict.py · run_suite.py
+analysis/        eda · compare_models · peak_hours · tuning_ablation · feature_importance · explain · reliability
+                 paper_protocol · modern_models · blend
+tools/           export_models · build_report · md2docx · prepare_large_dataset (METR-LA / PEMS-BAY)
 models/          checkpoint cuối cùng
 reports/         BAO_CAO_TGCN.md/.docx, figures/, tables/
 tests/           8 unit test
