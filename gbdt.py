@@ -59,7 +59,7 @@ def tod_profile(bundle, slots, smooth=2):
     return prof, slot
 
 
-def build_features(bundle, starts, L, H, p, nb, prof, slot):
+def build_features(bundle, starts, L, H, p, nb, prof, slot, version=1):
     z = bundle.scaled.astype(np.float64)                          # [T,N]
     T, N = z.shape
     pz = z @ p.T                                                  # 1-hop neighbour mean
@@ -96,13 +96,30 @@ def build_features(bundle, starts, L, H, p, nb, prof, slot):
     feats.update({'sensor_mean': np.broadcast_to(bundle.means, (len(s), N)),
                   'sensor_std': np.broadcast_to(bundle.stds, (len(s), N)),
                   'degree': np.broadcast_to(np.array([len(x) for x in nb], float), (len(s), N))})
+    extra_k = {}
+    if version >= 2:
+        # anomaly = deviation from the sensor's own time-of-day profile
+        dev = z - prof[slot]                                           # [T,N]
+        nb_dev = dev @ p.T
+        for j in (1, 3, 6):
+            feats[f'dev_lag{j + 1}'] = dev[last - j]
+        feats['dev_trend3'] = dev[last] - dev[last - 3]
+        feats['nb_dev_lag1'] = nb_dev[last]                            # neighbours abnormally slow?
+        feats['nb_dev_trend'] = nb_dev[last] - nb_dev[last - 2]
+        net = dev.mean(1); share_slow = (dev < -1.0).mean(1)          # network-wide state
+        feats['net_dev'] = bc(net[last]); feats['net_dev_trend'] = bc(net[last] - net[last - 3])
+        feats['net_share_slow'] = bc(share_slow[last])
+        nb_prof = prof @ p.T                                           # neighbours' profile
+        extra_k = {k: (nb_prof[(slot[last] + k) % slots] - nb_prof[slot[last]]).ravel().astype(np.float32)
+                   for k in range(1, H + 1)}
     base = pd.DataFrame({k: np.asarray(v, dtype=np.float32).ravel() for k, v in feats.items()})
     prof_change = {k: (prof[(slot[last] + k) % slots] - prof[slot[last]]).ravel().astype(np.float32)
                    for k in range(1, H + 1)}
-    return base, prof_change, z[last]
+    return base, prof_change, z[last], extra_k
 
 
-def run(dataset, seed, L=12, H=None, threads=2, out_root=None, max_train_rows=None):
+def run(dataset, seed, L=12, H=None, threads=2, out_root=None, max_train_rows=None, version=1,
+        params_override=None, tag='lgbm'):
     H = H or DEFAULT_H[dataset]
     b = load_bundle(ROOT / 'data' / dataset, dataset, L, H)
     p, nb = neighbour_ops(b)
@@ -111,19 +128,22 @@ def run(dataset, seed, L=12, H=None, threads=2, out_root=None, max_train_rows=No
     sets = {}
     for split in ('train', 'val', 'test'):
         st = TrafficWindows(b, split, L, H).starts
-        X, pc, zlast = build_features(b, st, L, H, p, nb, prof, slot)
+        X, pc, zlast, ek = build_features(b, st, L, H, p, nb, prof, slot, version)
         Yz = np.stack([b.scaled[st + k] for k in range(H)], axis=1)          # [S,H,N]
-        sets[split] = (st, X, pc, zlast, Yz)
+        sets[split] = (st, X, pc, zlast, Yz, ek)
     params = dict(objective='l2', learning_rate=0.05, num_leaves=63, min_child_samples=100,
                   subsample=0.8, subsample_freq=1, colsample_bytree=0.8, reg_lambda=1.0,
                   n_estimators=3000, random_state=seed, n_jobs=threads, verbose=-1)
+    params.update(params_override or {})
     preds = {sp: np.zeros_like(sets[sp][4]) for sp in ('val', 'test')}
     importance = []; best_iters = []
     t0 = time.time()
     for k in range(H):
         def xy(sp):
-            st, X, pc, zlast, Yz = sets[sp]
+            st, X, pc, zlast, Yz, ek = sets[sp]
             Xk = X.copy(); Xk['prof_change_k'] = pc[k + 1]
+            if ek:
+                Xk['nb_prof_change_k'] = ek[k + 1]
             yk = (Yz[:, k, :] - zlast).ravel()
             return Xk, yk
         Xtr, ytr = xy('train'); Xva, yva = xy('val')
@@ -136,7 +156,7 @@ def run(dataset, seed, L=12, H=None, threads=2, out_root=None, max_train_rows=No
         importance.append(pd.Series(m.booster_.feature_importance('gain'), index=Xtr.columns, name=k + 1))
         for sp in ('val', 'test'):
             Xs, _ = xy(sp)
-            st, _, _, zlast, _ = sets[sp]
+            st, _, _, zlast, _, _ = sets[sp]
             preds[sp][:, k, :] = (m.predict(Xs, num_iteration=m.best_iteration_).reshape(len(st), -1) + zlast)
         print(f'  horizon {k + 1}/{H}: best_iter {best_iters[-1]}', flush=True)
     raw = lambda zz: zz * b.stds[None, None, :] + b.means[None, None, :]
@@ -146,13 +166,14 @@ def run(dataset, seed, L=12, H=None, threads=2, out_root=None, max_train_rows=No
     if (yt == 0).any():
         sc['masked_nonzero'] = horizon_metrics(yt, pt, b.interval_min, mask_zero=True)
     val_rmse = metrics(yv, pv, mask_zero=False)['RMSE']
-    out = Path(out_root or ROOT / 'results' / dataset / 'modern' / 'lgbm' / f'seed_{seed}')
+    out = Path(out_root or ROOT / 'results' / dataset / 'modern' / tag / f'seed_{seed}')
     out.mkdir(parents=True, exist_ok=True)
-    sc.update({'dataset': dataset, 'model': 'lgbm', 'seed': seed, 'best_epoch': None, 'caution': '',
+    sc.update({'dataset': dataset, 'model': tag, 'seed': seed, 'best_epoch': None, 'caution': '',
                'n_samples': int(len(sets['test'][0])), 'data_is_synthetic': False})
     save_json(sc, out / 'metrics.json')
-    save_json({'model': 'lgbm', 'params': params, 'best_iterations': best_iters, 'seq_len': L, 'horizon': H,
-               'features': list(sets['train'][1].columns) + ['prof_change_k']}, out / 'config.json')
+    save_json({'model': tag, 'feature_version': version, 'params': params, 'best_iterations': best_iters, 'seq_len': L, 'horizon': H,
+               'features': list(sets['train'][1].columns) + ['prof_change_k'] + (['nb_prof_change_k'] if version >= 2 else [])},
+              out / 'config.json')
     save_json({'best_epoch': None, 'val_rmse_raw': val_rmse, 'train_seconds': time.time() - t0,
                'n_parameters': None}, out / 'training_summary.json')
     pd.DataFrame({'epoch': [1], 'val_mse_scaled': [np.nan], 'val_rmse_raw': [val_rmse]}).to_csv(out / 'history.csv', index=False)
@@ -170,11 +191,20 @@ def main():
     ap.add_argument('--dataset', default='losloop', choices=list(DEFAULT_H))
     ap.add_argument('--seeds', nargs='+', type=int, default=[42])
     ap.add_argument('--threads', type=int, default=2)
+    ap.add_argument('--features', type=int, default=1, choices=[1, 2],
+                    help='2 = + neighbour / network-wide anomaly features (results in modern/lgbm_v2)')
+    ap.add_argument('--num-leaves', type=int, default=None)
+    ap.add_argument('--lr', type=float, default=None)
+    ap.add_argument('--tag', default=None, help='output folder name under results/<ds>/modern/')
     ap.add_argument('--max-train-rows', type=int, default=None,
                     help='subsample training rows per horizon (e.g. 2000000 for METR-LA/PEMS-BAY)')
     a = ap.parse_args()
+    over = {k: v for k, v in (('num_leaves', a.num_leaves), ('learning_rate', a.lr)) if v is not None}
+    tag = a.tag or ('lgbm' if a.features == 1 and not over else
+                    'lgbm_v2' if not over else f'lgbm_v{a.features}_' + '_'.join(f'{k}{v}' for k, v in over.items()))
     for s in a.seeds:
-        run(a.dataset, s, threads=a.threads, max_train_rows=a.max_train_rows)
+        run(a.dataset, s, threads=a.threads, max_train_rows=a.max_train_rows, version=a.features,
+            params_override=over, tag=tag)
 
 
 if __name__ == '__main__':

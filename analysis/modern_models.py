@@ -22,16 +22,17 @@ LABEL = {'gru': 'GRU', 'tgcn': 'T-GCN', 'gru_res_time': 'GRU-RT', 'tgcn_res_time
          'stid': 'STID', 'stid_res': 'STID + residual', 'dcrnn': 'DCRNN-lite', 'dcrnn_res': 'DCRNN-lite + residual',
          'gwnet': 'Graph WaveNet', 'gwnet_res': 'Graph WaveNet + residual',
          'gru_rtp': 'GRU-RTP (+ hồ sơ giờ)', 'tgcn_rtsp': 'T-GCN-RTSP (+ hồ sơ giờ)', 'lgbm': 'LightGBM (đặc trưng KG-TG)',
+         'lgbm_v2': 'LightGBM v2 (+ bất thường láng giềng/toàn mạng)',
          'staeformer': 'STAEformer', 'staeformer_full': 'STAEformer (full)', 'staeformer_full_res': 'STAEformer full + res',
          'gwnet_full': 'Graph WaveNet (full)', 'gwnet_full_res': 'Graph WaveNet full + res',
          'naive': 'Persistence', 'ha_window': 'HA (TB cửa sổ)', 'linear': 'Hồi quy tuyến tính'}
 FAMILY = {'naive': 'baseline', 'ha_window': 'baseline', 'linear': 'baseline', 'gru': 'paper', 'tgcn': 'paper',
           'gru_res_time': 'phần 1', 'tgcn_res_time': 'phần 1', 'tgcn_selfsep': 'phần 1', 'tgcn_selfsep_res_time': 'phần 1',
-          'lgbm': 'khai phá dữ liệu', 'gru_rtp': 'hồ sơ giờ', 'tgcn_rtsp': 'hồ sơ giờ'}
+          'lgbm': 'khai phá dữ liệu', 'lgbm_v2': 'khai phá dữ liệu', 'gru_rtp': 'hồ sơ giờ', 'tgcn_rtsp': 'hồ sơ giờ'}
 GROUPS = ('baselines', 'main', 'improve', 'variants', 'modern', 'modern_gpu')
 KEEP = ['naive', 'linear', 'gru', 'tgcn', 'gru_res_time', 'tgcn_res_time', 'tgcn_selfsep', 'tgcn_selfsep_res_time',
         'stid', 'stid_res', 'dcrnn', 'dcrnn_res', 'gwnet', 'gwnet_res', 'gwnet_full', 'gwnet_full_res',
-        'staeformer', 'staeformer_full', 'staeformer_full_res', 'gru_rtp', 'tgcn_rtsp', 'lgbm']
+        'staeformer', 'staeformer_full', 'staeformer_full_res', 'gru_rtp', 'tgcn_rtsp', 'lgbm', 'lgbm_v2']
 
 
 def lab(n):
@@ -104,7 +105,7 @@ def main():
         rs = by.get(name)
         if not rs: continue
         ms = [view(r['metrics']) for r in rs]
-        vr = [val_rmse(r['dir'], r['metrics'].get('best_epoch')) if r['name'] != 'lgbm'
+        vr = [val_rmse(r['dir'], r['metrics'].get('best_epoch')) if not r['name'].startswith('lgbm')
               else json.loads((r['dir'] / 'training_summary.json').read_text())['val_rmse_raw'] for r in rs]
         f = lambda key, k=None: np.array([(m['overall'] if k is None else m['per_horizon'][k])[key] for m in ms])
         ks = list(ms[0]['per_horizon'])
