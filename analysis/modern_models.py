@@ -23,16 +23,17 @@ LABEL = {'gru': 'GRU', 'tgcn': 'T-GCN', 'gru_res_time': 'GRU-RT', 'tgcn_res_time
          'gwnet': 'Graph WaveNet', 'gwnet_res': 'Graph WaveNet + residual',
          'gru_rtp': 'GRU-RTP (+ hồ sơ giờ)', 'tgcn_rtsp': 'T-GCN-RTSP (+ hồ sơ giờ)', 'lgbm': 'LightGBM (đặc trưng KG-TG)',
          'lgbm_v2': 'LightGBM v2 (+ bất thường láng giềng/toàn mạng)',
+         'lgbm_best': 'LightGBM v2, 127 lá (chọn theo val)',
          'staeformer': 'STAEformer', 'staeformer_full': 'STAEformer (full)', 'staeformer_full_res': 'STAEformer full + res',
          'gwnet_full': 'Graph WaveNet (full)', 'gwnet_full_res': 'Graph WaveNet full + res',
          'naive': 'Persistence', 'ha_window': 'HA (TB cửa sổ)', 'linear': 'Hồi quy tuyến tính'}
 FAMILY = {'naive': 'baseline', 'ha_window': 'baseline', 'linear': 'baseline', 'gru': 'paper', 'tgcn': 'paper',
           'gru_res_time': 'phần 1', 'tgcn_res_time': 'phần 1', 'tgcn_selfsep': 'phần 1', 'tgcn_selfsep_res_time': 'phần 1',
-          'lgbm': 'khai phá dữ liệu', 'lgbm_v2': 'khai phá dữ liệu', 'gru_rtp': 'hồ sơ giờ', 'tgcn_rtsp': 'hồ sơ giờ'}
+          'lgbm': 'khai phá dữ liệu', 'lgbm_v2': 'khai phá dữ liệu', 'lgbm_best': 'khai phá dữ liệu', 'gru_rtp': 'hồ sơ giờ', 'tgcn_rtsp': 'hồ sơ giờ'}
 GROUPS = ('baselines', 'main', 'improve', 'variants', 'modern', 'modern_gpu')
 KEEP = ['naive', 'linear', 'gru', 'tgcn', 'gru_res_time', 'tgcn_res_time', 'tgcn_selfsep', 'tgcn_selfsep_res_time',
         'stid', 'stid_res', 'dcrnn', 'dcrnn_res', 'gwnet', 'gwnet_res', 'gwnet_full', 'gwnet_full_res',
-        'staeformer', 'staeformer_full', 'staeformer_full_res', 'gru_rtp', 'tgcn_rtsp', 'lgbm', 'lgbm_v2']
+        'staeformer', 'staeformer_full', 'staeformer_full_res', 'gru_rtp', 'tgcn_rtsp', 'lgbm', 'lgbm_v2', 'lgbm_best']
 
 
 def lab(n):
@@ -121,12 +122,14 @@ def main():
     df = pd.DataFrame(rows)
     # ---- ensembles
     ens = {}
-    if 'lgbm' in by and len(by['lgbm']) > 1:
-        ens['lgbm'] = mean_pred(by['lgbm'])
+    LG = 'lgbm_best' if len(by.get('lgbm_best', [])) >= 3 else 'lgbm'
+    if LG in by and len(by[LG]) > 1:
+        ens[LG] = mean_pred(by[LG])
     pref_deep = 'gru_rtp' if 'gru_rtp' in by else 'gru_res_time'
-    if 'lgbm' in by and pref_deep in by:
-        yt, a, t = mean_pred(by['lgbm']); _, bb, _ = mean_pred(by[pref_deep])
+    if LG in by and pref_deep in by:
+        yt, a, t = mean_pred(by[LG]); _, bb, _ = mean_pred(by[pref_deep])
         ens['lgbm_plus_' + pref_deep] = (yt, (a + bb) / 2, t)
+    blend = [r for r in run_dirs(ds) if r['group'] == 'ensemble' and r['name'] == 'blend']
     if 'gru_res_time' in by:
         ens['gru_res_time'] = mean_pred(by['gru_res_time'])
     if 'gru_rtp' in by:
@@ -143,23 +146,46 @@ def main():
                      'RMSE 15': m['per_horizon'][k15]['RMSE'], 'MAE 15': m['per_horizon'][k15]['MAE'],
                      'RMSE 60': m['per_horizon'][k60]['RMSE'], 'MAE 60': m['per_horizon'][k60]['MAE'],
                      'phút train/run': np.nan})
+    if blend:
+        m = view(blend[0]['metrics']); ks = list(m['per_horizon'])
+        k15, k60 = (ks[2], ks[11]) if len(ks) >= 12 else (ks[0], ks[-1])
+        rows.append({'name': 'ens_blend', 'Mô hình': 'Trộn theo tầm: ' + ' + '.join(LABEL.get(x, x) for x in blend[0]['metrics'].get('members', [])),
+                     'nhóm': 'ensemble', 'seed': 3, 'tham số': None, 'RMSE val': np.nan,
+                     'RMSE': m['overall']['RMSE'], 'RMSE_sd': np.nan, 'MAE': m['overall']['MAE'], 'MAE_sd': np.nan,
+                     'RMSE 15': m['per_horizon'][k15]['RMSE'], 'MAE 15': m['per_horizon'][k15]['MAE'],
+                     'RMSE 60': m['per_horizon'][k60]['RMSE'], 'MAE 60': m['per_horizon'][k60]['MAE'], 'phút train/run': np.nan})
     df = pd.DataFrame(rows).sort_values('RMSE')
     df.to_csv(TAB / f'modern_results_{ds}.csv', index=False)
+    # LightGBM configurations (seed 42), chosen by validation
+    tune = []
+    for tag, desc in (('lgbm', 'v1, 63 lá, lr 0.05'), ('lgbm_v2', 'v2, 63 lá, lr 0.05'),
+                      ('lgbm_v2_num_leaves31', 'v2, 31 lá'), ('lgbm_v2_num_leaves127', 'v2, 127 lá'),
+                      ('lgbm_v2_learning_rate0.03', 'v2, lr 0.03')):
+        d = ROOT / 'results' / ds / 'modern' / tag / 'seed_42'
+        if (d / 'metrics.json').is_file():
+            mm = view(json.loads((d / 'metrics.json').read_text()))
+            vv = json.loads((d / 'training_summary.json').read_text())['val_rmse_raw']
+            tune.append({'Cấu hình LightGBM (seed 42)': desc, 'RMSE val': round(vv, 3),
+                         'RMSE test': round(mm['overall']['RMSE'], 3), 'MAE test': round(mm['overall']['MAE'], 3)})
+    if tune:
+        pd.DataFrame(tune).to_csv(TAB / f'lgbm_tuning_{ds}.csv', index=False)
     print(df.drop(columns=['name']).round(3).to_string(index=False))
     # ---- paired tests against the previous best and against LightGBM
     block = 12 if ds == 'losloop' else 4
     ref_name = 'ensemble GRU-RT'
     ref = ens.get('gru_res_time')
     tests = []
-    cand = {**{k: mean_pred(v) for k, v in by.items() if k in ('lgbm', 'gru_rtp', 'tgcn_rtsp', 'stid_res', 'stid',
+    cand = {**{k: mean_pred(v) for k, v in by.items() if k in ('lgbm', 'lgbm_best', 'gru_rtp', 'tgcn_rtsp', 'stid_res', 'stid',
                                                                  'dcrnn', 'dcrnn_res', 'gwnet', 'gwnet_res')},
-            **{f'ens_{k}': v for k, v in ens.items() if k != 'gru_res_time'}}
+            **{f'ens_{k}': v for k, v in ens.items() if k != 'gru_res_time'},
+            **({'ens_blend': load_pred(blend[0]['dir'])} if blend else {})}
     if ref is not None:
         lb = per_sample_loss(ref[0], ref[1], mask_zero)
         for k, (yt, yp, _) in cand.items():
             d, lo, hi, pv = pair_test(per_sample_loss(yt, yp, mask_zero), lb, block)
             a_lab = (LABEL.get(k, k) + (' (TB 3 seed)' if len(by.get(k, [])) > 1 else '')) if not k.startswith('ens_') else \
-                (f'Ensemble LightGBM + {LABEL.get(k[14:], k[14:])}' if k.startswith('ens_lgbm_plus_')
+                ('Trộn theo tầm (fit trên val)' if k == 'ens_blend' else
+                 f'Ensemble LightGBM + {LABEL.get(k[14:], k[14:])}' if k.startswith('ens_lgbm_plus_')
                  else f'Ensemble {LABEL.get(k[4:], k[4:])} (3 seed)')
             tests.append({'A': a_lab,
                           'B': ref_name, 'ΔRMSE (A−B)': d, 'CI95_low': lo, 'CI95_high': hi, 'DM_p': pv})
@@ -173,7 +199,7 @@ def main():
     print(tdf.round(4).to_string(index=False))
     # ---- error by traffic state (15 and 60 min)
     sub_rows = []
-    show = {k: v for k, v in [('naive', None), ('gru_res_time', None), ('gru_rtp', None), ('lgbm', None)] if k in by or k == 'naive'}
+    show = {k: v for k, v in [('naive', None), ('gru_res_time', None), ('gru_rtp', None), (LG, None)] if k in by or k == 'naive'}
     preds = {}
     for k in show:
         if k == 'naive':
@@ -181,8 +207,8 @@ def main():
             preds[k] = load_pred(r[0]['dir'])
         else:
             preds[k] = mean_pred(by[k])
-    if 'lgbm' in by and pref_deep in by:
-        preds['ens'] = ens['lgbm_plus_' + pref_deep]
+    if blend:
+        preds['blend'] = load_pred(blend[0]['dir'])
     for k, (yt, yp, t) in preds.items():
         for hk, step in (('15 phút', 15 // iv - 1), ('60 phút', 60 // iv - 1)):
             ts = b.timestamps[t + step]
@@ -219,7 +245,7 @@ def main():
               ('gru_res_time', 'GRU-RT (TB 3 seed)', ps.MODEL_COLORS['gru_res_time'], '-'),
               ('stid_res', 'STID + residual', ps.SERIES[4], '-'), ('dcrnn_res', 'DCRNN-lite + residual', ps.SERIES[7], '-'),
               ('gwnet', 'Graph WaveNet', ps.SERIES[5], '-'), ('gru_rtp', 'GRU-RTP', ps.SERIES[2], '-'),
-              ('lgbm', 'LightGBM', ps.SERIES[3], '-')]
+              (LG, 'LightGBM', ps.SERIES[3], '-')]
     for key, name, c, ls in curves:
         if key not in by: continue
         ms = [view(r['metrics']) for r in by[key]]; ks = list(ms[0]['per_horizon'])
@@ -239,13 +265,15 @@ def main():
     fig.suptitle(f'{ds}: mô hình hiện đại và LightGBM theo tầm dự báo', fontsize=11.5)
     fig.tight_layout(); fig.savefig(FIG / f'modern_horizon_{ds}.png'); plt.close(fig)
     # LightGBM feature importance
-    if 'lgbm' in by:
-        imps = [pd.read_csv(r['dir'] / 'feature_importance_gain.csv', index_col=0) for r in by['lgbm']]
+    if LG in by:
+        imps = [pd.read_csv(r['dir'] / 'feature_importance_gain.csv', index_col=0) for r in by[LG]]
         share = sum(i / i.sum() for i in imps) / len(imps)                     # [features, horizons]
         groups = {'lịch sử chính nút': [c for c in share.index if c.startswith(('lag', 'diff', 'mean', 'std', 'min1', 'max'))],
                   'láng giềng (đồ thị)': [c for c in share.index if c.startswith(('nb', 'self_minus'))],
+                  'trạng thái toàn mạng': [c for c in share.index if c.startswith('net_')],
                   'lịch (giờ, thứ)': ['tod', 'tod_sin', 'tod_cos', 'dow', 'weekend'],
-                  'hồ sơ theo giờ của cảm biến': ['prof_now', 'dev_from_prof', 'prof_change_k'],
+                  'hồ sơ theo giờ của cảm biến': ['prof_now', 'dev_from_prof', 'prof_change_k', 'dev_lag2', 'dev_lag4',
+                                                  'dev_lag7', 'dev_trend3'],
                   'đặc tính cảm biến': ['sensor_mean', 'sensor_std', 'degree']}
         g = pd.DataFrame({k: share.loc[[c for c in v if c in share.index]].sum() for k, v in groups.items()})
         g.index = [int(i) * iv for i in g.index]
