@@ -74,6 +74,25 @@ class Forecaster:
         return out * self.stds + self.means
 
 
+def predict_gbdt(a):
+    from gbdt import GBDTForecaster
+    g = GBDTForecaster(a.checkpoint[0])
+    df = pd.read_csv(a.input); df.columns = [str(c) for c in df.columns]
+    times = pd.date_range(a.start_time or str(g.st['start_time']), periods=len(df), freq=f'{g.interval}min')
+    end = len(df) - 1 if a.end_time is None else int(times.get_indexer([pd.Timestamp(a.end_time)])[0])
+    fc, _ = g.predict(df, end, a.start_time)
+    target_times = pd.date_range(times[end] + pd.Timedelta(minutes=g.interval), periods=g.H, freq=f'{g.interval}min')
+    out = pd.DataFrame(fc, index=target_times, columns=g.sensor_ids); out.index.name = 'target_time'
+    print(f'LightGBM ({len(g.boosters)} boosters, one per horizon, features v{g.version}) | input ends {times[end]}')
+    show = out.iloc[:, :a.sensors].round(1)
+    if a.compare and end + g.H < len(df):
+        act = df.iloc[end + 1:end + 1 + g.H, :a.sensors].to_numpy()
+        show = pd.concat({'forecast': show, 'actual': pd.DataFrame(act, index=out.index, columns=show.columns)}, axis=1)
+    print(show.to_string())
+    if a.output:
+        out.to_csv(a.output); print('Saved', a.output)
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--checkpoint', required=True, nargs='+',
@@ -85,6 +104,8 @@ def main():
     p.add_argument('--compare', action='store_true', help='print actual values if they exist in the CSV')
     p.add_argument('--sensors', type=int, default=5, help='how many sensors to print')
     a = p.parse_args()
+    if len(a.checkpoint) == 1 and Path(a.checkpoint[0]).is_dir():      # LightGBM model directory
+        return predict_gbdt(a)
     members = [Forecaster(c) for c in a.checkpoint]
     f = members[0]
     if any(m.seq_len != f.seq_len or m.horizon != f.horizon or m.sensor_ids != f.sensor_ids for m in members):

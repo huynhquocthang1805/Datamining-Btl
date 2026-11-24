@@ -136,6 +136,7 @@ def run(dataset, seed, L=12, H=None, threads=2, out_root=None, max_train_rows=No
                   n_estimators=3000, random_state=seed, n_jobs=threads, verbose=-1)
     params.update(params_override or {})
     preds = {sp: np.zeros_like(sets[sp][4]) for sp in ('val', 'test')}
+    boosters = []
     importance = []; best_iters = []
     t0 = time.time()
     for k in range(H):
@@ -153,6 +154,7 @@ def run(dataset, seed, L=12, H=None, threads=2, out_root=None, max_train_rows=No
         m = lgb.LGBMRegressor(**params)
         m.fit(Xtr, ytr, eval_set=[(Xva, yva)], callbacks=[lgb.early_stopping(100, verbose=False)])
         best_iters.append(int(m.best_iteration_))
+        boosters.append(m.booster_)
         importance.append(pd.Series(m.booster_.feature_importance('gain'), index=Xtr.columns, name=k + 1))
         for sp in ('val', 'test'):
             Xs, _ = xy(sp)
@@ -181,11 +183,54 @@ def run(dataset, seed, L=12, H=None, threads=2, out_root=None, max_train_rows=No
                         time_indices=sets['test'][0], sensor_ids=np.array(b.sensor_ids))
     np.savez_compressed(out / 'val_predictions.npz', y_true=yv.astype(np.float32), y_pred=pv.astype(np.float32),
                         time_indices=sets['val'][0])          # used by analysis/blend.py (weights fit on val)
+    # self-contained model: one booster per horizon + everything needed to build features
+    mdir = out / 'model'; mdir.mkdir(exist_ok=True)
+    for k, bst in enumerate(boosters):
+        bst.save_model(str(mdir / f'h{k + 1:02d}.txt'), num_iteration=best_iters[k])
+    np.savez_compressed(mdir / 'stats.npz', means=b.means, stds=b.stds, adj=b.adj, profile=prof,
+                        sensor_ids=np.array(b.sensor_ids), interval_min=b.interval_min, seq_len=L, horizon=H,
+                        feature_version=version, start_time=str(b.timestamps[0]))
     imp = pd.concat(importance, axis=1).fillna(0)
     imp.to_csv(out / 'feature_importance_gain.csv')
     print(f'{dataset} seed {seed}: test RMSE {sc["overall"]["RMSE"]:.3f} MAE {sc["overall"]["MAE"]:.3f} '
           f'| val RMSE {val_rmse:.3f} | {time.time() - t0:.0f}s', flush=True)
     return sc
+
+
+class GBDTForecaster:
+    """Load a saved LightGBM model directory (results/<ds>/modern/<tag>/seed_<s>/model)
+    and forecast the next H steps for every sensor from a speed CSV."""
+
+    def __init__(self, model_dir):
+        from types import SimpleNamespace
+        mdir = Path(model_dir)
+        z = np.load(mdir / 'stats.npz', allow_pickle=False)
+        self.st = {k: z[k] for k in z.files}
+        self.H = int(self.st['horizon']); self.L = int(self.st['seq_len'])
+        self.version = int(self.st['feature_version'])
+        self.boosters = [lgb.Booster(model_file=str(mdir / f'h{k + 1:02d}.txt')) for k in range(self.H)]
+        self.sensor_ids = [str(x) for x in self.st['sensor_ids']]
+        self.interval = int(self.st['interval_min'])
+        self._ns = SimpleNamespace
+
+    def predict(self, df, end_index, start_time=None):
+        """df: speed table (rows = steps, columns = sensor ids); end_index: last observed row."""
+        values = df[self.sensor_ids].to_numpy(np.float32)
+        t0 = start_time or str(self.st['start_time'])
+        b = self._ns(values=values, scaled=((values - self.st['means']) / self.st['stds']).astype(np.float32),
+                     means=self.st['means'], stds=self.st['stds'], adj=self.st['adj'], interval_min=self.interval,
+                     timestamps=pd.date_range(t0, periods=len(values), freq=f'{self.interval}min'))
+        p, nb = neighbour_ops(b)
+        prof = self.st['profile']
+        slot = ((b.timestamps.hour * 60 + b.timestamps.minute) // self.interval).to_numpy()
+        X, pc, zlast, ek = build_features(b, np.array([end_index + 1]), self.L, self.H, p, nb, prof, slot, self.version)
+        out = np.zeros((self.H, len(self.sensor_ids)))
+        for k, bst in enumerate(self.boosters):
+            Xk = X.copy(); Xk['prof_change_k'] = pc[k + 1]
+            if ek:
+                Xk['nb_prof_change_k'] = ek[k + 1]
+            out[k] = bst.predict(Xk) + zlast[0]
+        return np.clip(out * self.st['stds'] + self.st['means'], 0, None), b.timestamps
 
 
 def main():
