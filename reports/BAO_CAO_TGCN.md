@@ -15,7 +15,13 @@ Chúng tôi cài đặt lại GRU, GCN và T-GCN (Zhao et al., 2019) bằng PyTo
 
 **Trên SZ-taxi** (dữ liệu taxi nhiễu, 25% giá trị thiếu), kết luận chính được lặp lại: T-GCN kém GRU có ý nghĩa (4.23 so với 4.18 RMSE), và cả hai chỉ hơn trung bình trượt 3 giờ ~1–3%; baseline HA trong bài báo cho SZ-taxi (7.92) yếu gần gấp đôi một trung bình trượt đúng nghĩa (4.17). Residual không giúp trên dữ liệu nhiễu — cải tiến phải phù hợp tính chất dữ liệu.
 
-**Mục lục:** 1. Ý tưởng · 2. Dữ liệu & kiểm tra dữ liệu · 3. Phương pháp · 4. Phản biện bài báo · 5. Kết quả 3 giai đoạn · 6. Mô hình huấn luyện được & cách dùng · 7. Minh chứng – giải thích cơ chế · 8. Độ tin cậy · 9. So sánh với bài báo · 10. SZ-taxi · 11. Hạn chế & hướng phát triển · 12. Kết luận
+**Cải tiến nâng cao (mục 11).** Áp dụng thêm kiến trúc hiện đại (STID, DCRNN, Graph WaveNet, STAEformer), một mô hình khai phá dữ liệu cổ điển (LightGBM với ~50 đặc trưng không gian–thời gian) và trộn theo từng tầm dự báo với trọng số học trên validation:
+
+7. **Kết quả tốt nhất: trộn LightGBM + GRU-RT theo tầm, RMSE 6.29 / MAE 3.58 trên Los-loop** — giảm 16% RMSE so với GRU/T-GCN gốc, 9% so với ensemble GRU-RT (p = 0.001); theo cách tính của bài báo: "15 phút" 4.81 / 2.80 và "60 phút" 6.29 / 3.58 so với 5.13 / 3.18 và 7.27 / 4.60 của T-GCN trong bài báo.
+8. **Chìa khóa là kiến thức miền, không phải kiến trúc:** đặc trưng quan trọng nhất là *hồ sơ tốc độ theo khung giờ của từng cảm biến* (~50–65% tầm quan trọng). Nhờ nó, giờ cao điểm — điểm yếu ở trên — được khắc phục: lần đầu có mô hình thắng persistence trong cao điểm ở 15 phút, và giảm 19% MAE ở 60 phút.
+9. **Kiến trúc SOTA "nguyên bản" quá khớp trên 5 ngày dữ liệu** (STID 7.43 ± 0.21, DCRNN-lite 7.56) — kết luận về chúng cần dữ liệu lớn hơn; mã và hướng dẫn chạy trên GPU / METR-LA / PEMS-BAY ở `LOCAL_RUN.md`.
+
+**Mục lục:** 1. Ý tưởng · 2. Dữ liệu & kiểm tra dữ liệu · 3. Phương pháp · 4. Phản biện bài báo · 5. Kết quả 3 giai đoạn · 6. Mô hình huấn luyện được & cách dùng · 7. Minh chứng – giải thích cơ chế · 8. Độ tin cậy · 9. So sánh với bài báo · 10. SZ-taxi · 11. Cải tiến nâng cao: mô hình hiện đại, LightGBM, trộn theo tầm · 12. Hạn chế & hướng phát triển · 13. Kết luận
 
 
 ## 1. Ý tưởng
@@ -861,18 +867,20 @@ Ensemble/trộn theo tầm không cần mã riêng để dùng: lấy dự báo 
 
 **Hướng phát triển (theo thứ tự lợi ích kỳ vọng / chi phí)**
 
-1. **Đưa vào sản phẩm ngay:** ensemble GRU-RT + bước kiểm tra dữ liệu thiếu (mô hình residual rất nhạy với đầu vào = 0) + cắt dự báo về [0, v_max].
-2. **Tích chập đồ thị không làm loãng tín hiệu:** dạng [x, Âx]W đã cho kết quả tốt; bước tiếp theo là diffusion convolution hai chiều của DCRNN (Li et al., 2018 — bài báo thứ 2 trong danh sách tham khảo), phù hợp đồ thị có hướng như SZ-taxi.
-3. **Hàm mất mát cho giờ cao điểm:** cân loss theo phương sai cảm biến chưa ổn định (mục 5.4); nên thử trọng số trực tiếp cho mẫu kẹt xe hoặc dự báo phân vị (quantile loss) để có khoảng dự báo đáng tin hơn trong cao điểm.
-4. **Conformal theo giờ** để khoảng dự báo đạt độ phủ đúng cả trong giờ cao điểm.
-5. **Dữ liệu dài hơn:** với ≥ 1 tháng dữ liệu, đặc trưng thời gian và đồ thị thích nghi có cơ hội phát huy (hiện bị quá khớp).
-6. **Điền giá trị thiếu ở đầu vào** (SZ-taxi: số 0 = không có taxi) bằng trung bình láng giềng hoặc hồ sơ theo giờ, thay vì chỉ bỏ qua chúng trong loss (đã thử, không cải thiện).
+1. **Đưa vào sử dụng ngay:** trộn LightGBM + GRU-RT theo tầm (mục 11), kèm bước kiểm tra/điền giá trị thiếu ở đầu vào và cắt dự báo về [0, v_max].
+2. **Chạy các kiến trúc hiện đại trên dữ liệu đủ lớn** (METR-LA, PEMS-BAY — `LOCAL_RUN.md`): Graph WaveNet, STAEformer cỡ đầy đủ trên GPU, để kiểm chứng xem lợi thế của chúng có xuất hiện khi không bị giới hạn bởi 5 ngày dữ liệu.
+3. **Đưa hồ sơ theo giờ vào mạng nơ-ron một cách có điều chuẩn**: hiện GRU-RTP/T-GCN-RTSP quá khớp sau 6–11 epoch; nên thử dropout/weight decay mạnh hơn, hoặc dừng sớm riêng cho từng tầm như LightGBM.
+4. **Dự báo phân vị / conformal theo giờ** để khoảng dự báo đạt độ phủ đúng cả trong giờ cao điểm.
+5. **Điền giá trị thiếu ở đầu vào** (SZ-taxi: số 0 = không có taxi) bằng trung bình láng giềng hoặc hồ sơ theo giờ, thay vì chỉ bỏ qua chúng trong loss (đã thử, không cải thiện).
+6. **Dữ liệu ngoài**: lịch sự kiện, tai nạn, thời tiết — nguồn chính của sai số lớn còn lại trong giờ cao điểm.
 
 ## 13. Kết luận
 
-Chúng tôi đã cài đặt lại và chạy GRU, GCN, T-GCN cùng 4 baseline cổ điển trên Los-loop và SZ-taxi với cùng dữ liệu, cùng cách chia và 3 seed (≈ 60 run). **GRU tái lập đúng bài báo; T-GCN thì không vượt được GRU** một cách có ý nghĩa trên cả hai bộ dữ liệu — chính Bảng 1 của bài báo cũng cho thấy MAE của GRU tốt hơn. Nguyên nhân cơ chế là phép chuẩn hóa D^(-1/2)(A+I)D^(-1/2) chỉ để lại ~30% trọng số cho tín hiệu của chính nút, làm hỏng dự báo tầm ngắn; bằng chứng đến từ bốn hướng độc lập (thí nghiệm liều–đáp ứng với self-loop, permutation importance, gradient saliency và việc sửa đúng chỗ đó — tách self/láng giềng — làm T-GCN vượt GRU có ý nghĩa thống kê). Con số của bài báo còn được "làm đẹp" bởi việc chọn epoch theo test, cách gộp tầm dự báo và baseline yếu (thiếu persistence; HA trên SZ-taxi yếu gần gấp đôi một trung bình trượt) — trong khi persistence lại là mô hình tốt nhất trong giờ cao điểm.
+Chúng tôi đã cài đặt lại và chạy GRU, GCN, T-GCN cùng 4 baseline cổ điển trên Los-loop và SZ-taxi với cùng dữ liệu, cùng cách chia và 3 seed (≈ 100 run kể cả phần nâng cao). **GRU tái lập đúng bài báo; T-GCN thì không vượt được GRU** một cách có ý nghĩa trên cả hai bộ dữ liệu — chính Bảng 1 của bài báo cũng cho thấy MAE của GRU tốt hơn. Nguyên nhân cơ chế là phép chuẩn hóa D^(-1/2)(A+I)D^(-1/2) chỉ để lại ~30% trọng số cho tín hiệu của chính nút, làm hỏng dự báo tầm ngắn; bằng chứng đến từ bốn hướng độc lập (thí nghiệm liều–đáp ứng với self-loop, permutation importance, gradient saliency và việc sửa đúng chỗ đó — tách self/láng giềng — làm T-GCN vượt GRU có ý nghĩa thống kê). Con số của bài báo còn được "làm đẹp" bởi việc chọn epoch theo test, cách gộp tầm dự báo và baseline yếu (thiếu persistence; HA trên SZ-taxi yếu gần gấp đôi một trung bình trượt) — trong khi persistence lại là mô hình tốt nhất trong giờ cao điểm.
 
 Cải tiến hiệu quả nhất trên Los-loop không nằm ở đồ thị mà ở **cách đặt bài toán**: học phần thay đổi so với giá trị cuối (residual) và cho mô hình biết giờ trong ngày; ensemble 3 seed của GRU-RT giảm RMSE 7.8% so với GRU và 8.0% so với T-GCN (có ý nghĩa thống kê), vượt mọi con số trong bài báo dù dùng giao thức chặt hơn. Nhưng cải tiến phụ thuộc dữ liệu: trên SZ-taxi (nhiễu, nhiều giá trị thiếu) residual không giúp, và mọi mô hình chỉ hơn trung bình trượt vài phần trăm. Đồ thị có giá trị thật — ở tầm xa, khi tốc độ biến động mạnh, khi dữ liệu nhiễu — nhưng chỉ khi được thiết kế để không xóa mờ thông tin riêng của từng nút.
+
+Phần cải tiến nâng cao (mục 11) củng cố kết luận đó theo hướng khai phá dữ liệu: **thông tin đúng quan trọng hơn kiến trúc phức tạp**. Một mô hình LightGBM với đặc trưng thiết kế từ hiểu biết về giao thông — đặc biệt là hồ sơ tốc độ theo khung giờ của từng cảm biến — vượt mọi mạng nơ-ron (kể cả các kiến trúc 2019–2023) trên dữ liệu nhỏ này, khắc phục điểm yếu giờ cao điểm, và khi trộn theo tầm với GRU-RT (trọng số học trên validation) cho sai số thấp hơn 16% so với T-GCN gốc. Các kiến trúc hiện đại cần được đánh giá lại trên dữ liệu nhiều tháng trước khi kết luận.
 
 ## Phụ lục A. Cách chạy lại toàn bộ
 

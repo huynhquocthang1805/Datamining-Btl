@@ -15,4 +15,10 @@ Chúng tôi cài đặt lại GRU, GCN và T-GCN (Zhao et al., 2019) bằng PyTo
 
 **Trên SZ-taxi** (dữ liệu taxi nhiễu, 25% giá trị thiếu), kết luận chính được lặp lại: T-GCN kém GRU có ý nghĩa (4.23 so với 4.18 RMSE), và cả hai chỉ hơn trung bình trượt 3 giờ ~1–3%; baseline HA trong bài báo cho SZ-taxi (7.92) yếu gần gấp đôi một trung bình trượt đúng nghĩa (4.17). Residual không giúp trên dữ liệu nhiễu — cải tiến phải phù hợp tính chất dữ liệu.
 
-**Mục lục:** 1. Ý tưởng · 2. Dữ liệu & kiểm tra dữ liệu · 3. Phương pháp · 4. Phản biện bài báo · 5. Kết quả 3 giai đoạn · 6. Mô hình huấn luyện được & cách dùng · 7. Minh chứng – giải thích cơ chế · 8. Độ tin cậy · 9. So sánh với bài báo · 10. SZ-taxi · 11. Hạn chế & hướng phát triển · 12. Kết luận
+**Cải tiến nâng cao (mục 11).** Áp dụng thêm kiến trúc hiện đại (STID, DCRNN, Graph WaveNet, STAEformer), một mô hình khai phá dữ liệu cổ điển (LightGBM với ~50 đặc trưng không gian–thời gian) và trộn theo từng tầm dự báo với trọng số học trên validation:
+
+7. **Kết quả tốt nhất: trộn LightGBM + GRU-RT theo tầm, RMSE 6.29 / MAE 3.58 trên Los-loop** — giảm 16% RMSE so với GRU/T-GCN gốc, 9% so với ensemble GRU-RT (p = 0.001); theo cách tính của bài báo: "15 phút" 4.81 / 2.80 và "60 phút" 6.29 / 3.58 so với 5.13 / 3.18 và 7.27 / 4.60 của T-GCN trong bài báo.
+8. **Chìa khóa là kiến thức miền, không phải kiến trúc:** đặc trưng quan trọng nhất là *hồ sơ tốc độ theo khung giờ của từng cảm biến* (~50–65% tầm quan trọng). Nhờ nó, giờ cao điểm — điểm yếu ở trên — được khắc phục: lần đầu có mô hình thắng persistence trong cao điểm ở 15 phút, và giảm 19% MAE ở 60 phút.
+9. **Kiến trúc SOTA "nguyên bản" quá khớp trên 5 ngày dữ liệu** (STID 7.43 ± 0.21, DCRNN-lite 7.56) — kết luận về chúng cần dữ liệu lớn hơn; mã và hướng dẫn chạy trên GPU / METR-LA / PEMS-BAY ở `LOCAL_RUN.md`.
+
+**Mục lục:** 1. Ý tưởng · 2. Dữ liệu & kiểm tra dữ liệu · 3. Phương pháp · 4. Phản biện bài báo · 5. Kết quả 3 giai đoạn · 6. Mô hình huấn luyện được & cách dùng · 7. Minh chứng – giải thích cơ chế · 8. Độ tin cậy · 9. So sánh với bài báo · 10. SZ-taxi · 11. Cải tiến nâng cao: mô hình hiện đại, LightGBM, trộn theo tầm · 12. Hạn chế & hướng phát triển · 13. Kết luận
