@@ -683,7 +683,7 @@ STAEformer (83–390 s/epoch trên CPU) và Graph WaveNet cỡ đầy đủ đư
 
 | Mô hình | nhóm | seed | tham số | RMSE val | RMSE test | MAE test | 15 phút | 60 phút | phút/run |
 |---|---|---|---|---|---|---|---|---|---|
-| Trộn theo tầm: LightGBM v2, 127 lá (chọn theo val) + Graph WaveNet + residual + GRU-RT + T-GCN-RTSP (+ hồ sơ giờ) | ensemble | 3 | — | — | 6.190 | 3.494 | 5.37 / 3.08 | 7.20 / 4.11 | — |
+| Trộn theo tầm: LightGBM + Graph WaveNet-res + GRU-RT + T-GCN-RTSP | ensemble | 3 | — | — | 6.190 | 3.494 | 5.37 / 3.08 | 7.20 / 4.11 | — |
 | Ensemble LightGBM v2, 127 lá (chọn theo val) (3 seed) | ensemble | 3 | — | — | 6.438 | 3.578 | 5.63 / 3.17 | 7.46 / 4.21 | — |
 | Ensemble LightGBM + GRU-RTP (+ hồ sơ giờ) | ensemble | 3 | — | — | 6.452 | 3.726 | 5.65 / 3.30 | 7.49 / 4.41 | — |
 | LightGBM v2, 127 lá (chọn theo val) | khai phá dữ liệu | 3 | — | 5.339 | 6.467 ± 0.000 | 3.595 ± 0.005 | 5.66 / 3.19 | 7.48 / 4.22 | 5 |
@@ -806,7 +806,7 @@ Tỉ trọng gain theo nhóm thông tin (trung bình 3 seed):
 
 ![Hình 23. Trọng số trộn theo tầm dự báo (fit trên validation)](figures/blend_weights_losloop.png)
 
-| Tầm | LightGBM | gwnet_res | GRU-RT | T-GCN-RTSP |
+| Tầm | LightGBM | Graph WaveNet + res | GRU-RT | T-GCN-RTSP |
 |---|---|---|---|---|
 | 5 phút | 0.45 | 0.5 | 0.05 | 0.0 |
 | 15 phút | 0.35 | 0.6 | 0.05 | 0.0 |
@@ -826,7 +826,7 @@ Cùng các hướng trên SZ-taxi (22 ngày train, mục tiêu ≠ 0; Graph Wave
 
 | Mô hình | nhóm | seed | tham số | RMSE val | RMSE test | MAE test | 15 phút | 60 phút | phút/run |
 |---|---|---|---|---|---|---|---|---|---|
-| Trộn theo tầm: LightGBM v2, 127 lá (chọn theo val) + STID + residual + GRU-RTP (+ hồ sơ giờ) + GRU | ensemble | 3 | — | — | 4.402 | 3.106 | 4.35 / 3.06 | 4.44 / 3.14 | — |
+| Trộn theo tầm: LightGBM + STID-res + GRU-RTP + GRU | ensemble | 3 | — | — | 4.402 | 3.106 | 4.35 / 3.06 | 4.44 / 3.14 | — |
 | STID | hiện đại | 3 | 108,292 | 3.829 | 4.445 ± 0.009 | 3.140 ± 0.005 | 4.39 / 3.09 | 4.49 / 3.18 | 4 |
 | STID + residual | hiện đại | 3 | 108,292 | 3.829 | 4.449 ± 0.007 | 3.143 ± 0.009 | 4.38 / 3.09 | 4.50 / 3.18 | 4 |
 | Ensemble LightGBM v2, 127 lá (chọn theo val) (3 seed) | ensemble | 3 | — | — | 4.484 | 3.163 | 4.44 / 3.12 | 4.51 / 3.19 | — |

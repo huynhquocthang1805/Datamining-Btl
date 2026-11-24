@@ -22,7 +22,8 @@ import matplotlib.pyplot as plt
 
 NAMES = {'lgbm': 'LightGBM', 'lgbm_v2': 'LightGBM v2', 'lgbm_best': 'LightGBM', 'gru_rtp': 'GRU-RTP', 'gru_res_time': 'GRU-RT',
          'tgcn_rtsp': 'T-GCN-RTSP', 'tgcn_selfsep_res_time': 'T-GCN-RTS', 'stid_res': 'STID + res',
-         'tgcn_selfsep': 'T-GCN tách self', 'dcrnn': 'DCRNN-lite', 'gwnet': 'Graph WaveNet'}
+         'tgcn_selfsep': 'T-GCN tách self', 'dcrnn': 'DCRNN-lite', 'gwnet': 'Graph WaveNet',
+         'gwnet_res': 'Graph WaveNet + res', 'gru': 'GRU', 'stid': 'STID'}
 
 
 def member_runs(ds, name):
@@ -102,7 +103,7 @@ def main():
         bottom += wdf[col].values
     ax.set(xlabel='Tầm dự báo (phút)', ylabel='Trọng số (fit trên validation)', ylim=(0, 1),
            title=f'{ds}: trọng số trộn theo từng tầm dự báo')
-    ax.legend(fontsize=8, loc='lower right'); ax.grid(axis='x', visible=False)
+    ax.legend(fontsize=8, loc='upper left', bbox_to_anchor=(1.01, 1.0)); ax.grid(axis='x', visible=False)
     fig.tight_layout(); fig.savefig(FIG / f'{a.tag}_weights_{ds}.png'); plt.close(fig)
 
 

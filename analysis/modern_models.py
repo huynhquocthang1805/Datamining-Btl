@@ -149,7 +149,9 @@ def main():
     if blend:
         m = view(blend[0]['metrics']); ks = list(m['per_horizon'])
         k15, k60 = (ks[2], ks[11]) if len(ks) >= 12 else (ks[0], ks[-1])
-        rows.append({'name': 'ens_blend', 'Mô hình': 'Trộn theo tầm: ' + ' + '.join(LABEL.get(x, x) for x in blend[0]['metrics'].get('members', [])),
+        short = {'lgbm_best': 'LightGBM', 'gwnet_res': 'Graph WaveNet-res', 'gru_res_time': 'GRU-RT',
+                 'tgcn_rtsp': 'T-GCN-RTSP', 'gru_rtp': 'GRU-RTP', 'stid_res': 'STID-res', 'gru': 'GRU'}
+        rows.append({'name': 'ens_blend', 'Mô hình': 'Trộn theo tầm: ' + ' + '.join(short.get(x, x) for x in blend[0]['metrics'].get('members', [])),
                      'nhóm': 'ensemble', 'seed': 3, 'tham số': None, 'RMSE val': np.nan,
                      'RMSE': m['overall']['RMSE'], 'RMSE_sd': np.nan, 'MAE': m['overall']['MAE'], 'MAE_sd': np.nan,
                      'RMSE 15': m['per_horizon'][k15]['RMSE'], 'MAE 15': m['per_horizon'][k15]['MAE'],
@@ -228,14 +230,21 @@ def main():
     fig, ax = plt.subplots(figsize=(10, 0.36 * len(df) + 1.3))
     d2 = df.iloc[::-1]
     y = np.arange(len(d2))
-    colors = [ps.SERIES[6] if n.startswith('ens') else ps.SERIES[1] if n == 'lgbm' else
-              ps.SERIES[2] if n in ('gru_rtp', 'tgcn_rtsp') else ps.NEUTRAL if n in ('naive', 'linear') else ps.SERIES[0]
-              for n in d2['name']]
+    modern = ('stid', 'stid_res', 'dcrnn', 'dcrnn_res', 'gwnet', 'gwnet_res', 'staeformer')
+    colors = [ps.SERIES[6] if n.startswith('ens') else ps.SERIES[1] if n.startswith('lgbm') else
+              ps.SERIES[2] if n in ('gru_rtp', 'tgcn_rtsp') else ps.SERIES[4] if n in modern else
+              ps.NEUTRAL if n in ('naive', 'linear') else ps.SERIES[0] for n in d2['name']]
     ax.barh(y, d2['RMSE'], color=colors, height=.7)
     for yi, v in zip(y, d2['RMSE']):
         ax.text(v + 0.03, yi, f'{v:.2f}', va='center', fontsize=7.5, color=ps.INK2)
     ax.set(yticks=y, yticklabels=d2['Mô hình'], xlabel='RMSE test (TB mọi tầm)' + (' — mục tiêu ≠ 0' if mask_zero else ''),
-           title=f'{ds}: mọi mô hình trên cùng tập test (cam = LightGBM, xanh lá = + hồ sơ giờ, tím = ensemble)')
+           title=f'{ds}: mọi mô hình trên cùng tập test')
+    from matplotlib.patches import Patch
+    ax.legend(handles=[Patch(color=c, label=l) for c, l in ((ps.SERIES[6], 'ensemble / trộn'), (ps.SERIES[1], 'LightGBM'),
+                                                            (ps.SERIES[4], 'kiến trúc hiện đại'), (ps.SERIES[2], 'mạng + hồ sơ giờ'),
+                                                            (ps.SERIES[0], 'GRU / T-GCN và cải tiến phần 1'),
+                                                            (ps.NEUTRAL, 'baseline'))],
+              loc='upper right', fontsize=8, frameon=True, facecolor=ps.SURFACE, edgecolor=ps.GRID)
     lo = df['RMSE'].min() * 0.9
     ax.set_xlim(lo, df['RMSE'].max() * 1.04); ax.grid(axis='y', visible=False)
     fig.tight_layout(); fig.savefig(FIG / f'modern_ranking_{ds}.png'); plt.close(fig)
@@ -289,7 +298,7 @@ def main():
             axes[1].bar(g.index, 100 * g[col], bottom=bottom, width=iv * 0.8, color=ps.SERIES[i], label=col)
             bottom += 100 * g[col].values
         axes[1].set(xlabel='Tầm dự báo (phút)', ylabel='% gain', title='Nhóm thông tin theo tầm dự báo', ylim=(0, 100))
-        axes[1].legend(fontsize=7.5, loc='lower right')
+        axes[1].legend(fontsize=7.5, loc='upper left', bbox_to_anchor=(1.01, 1.0))
         fig.suptitle(f'{ds}: LightGBM dựa vào thông tin gì?', fontsize=11.5)
         fig.tight_layout(); fig.savefig(FIG / f'lgbm_importance_{ds}.png'); plt.close(fig)
         print(g.round(3).to_string()); print((100 * top).round(1).to_string())
