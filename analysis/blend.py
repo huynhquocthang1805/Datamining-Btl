@@ -20,7 +20,7 @@ from tgcn.utility import save_json
 from tgcn import plotstyle as ps
 import matplotlib.pyplot as plt
 
-NAMES = {'lgbm': 'LightGBM', 'lgbm_v2': 'LightGBM v2', 'gru_rtp': 'GRU-RTP', 'gru_res_time': 'GRU-RT',
+NAMES = {'lgbm': 'LightGBM', 'lgbm_v2': 'LightGBM v2', 'lgbm_best': 'LightGBM', 'gru_rtp': 'GRU-RTP', 'gru_res_time': 'GRU-RT',
          'tgcn_rtsp': 'T-GCN-RTSP', 'tgcn_selfsep_res_time': 'T-GCN-RTS', 'stid_res': 'STID + res',
          'tgcn_selfsep': 'T-GCN tách self', 'dcrnn': 'DCRNN-lite', 'gwnet': 'Graph WaveNet'}
 
