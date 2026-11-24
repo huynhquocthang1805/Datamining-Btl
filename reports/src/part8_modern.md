@@ -43,7 +43,7 @@ Các kiến trúc này được thiết kế và báo cáo trên METR-LA/PEMS-BA
 - **Dấu hiệu quá khớp đo được:** epoch tốt nhất của STID là 4–11, DCRNN-lite 25–27, GRU-RTP 6–11, T-GCN-RTSP 6–11 (GRU-RT: 19–37; GRU: 87–101), và độ lệch giữa các seed của STID lớn gấp 30 lần GRU (0.21 so với 0.006).
 - **Ngoại lệ có tính hướng dẫn — Graph WaveNet + residual:** cũng quá khớp sớm (epoch tốt nhất 10–13) nhưng vẫn tốt: tích chập thời gian giãn nở + khuếch tán đồ thị hai chiều + đồ thị thích nghi cho biểu diễn đủ mạnh, còn residual (học Δ so với giá trị cuối — phát hiện ở mục 5.4) giữ cho mô hình không bao giờ tệ hơn persistence ở tầm ngắn. Bỏ residual: 6.86. Mẹo "đặt bài toán đúng" quan trọng ngang kiến trúc.
 - **Kết luận đúng là "chưa kiểm chứng được trên dữ liệu đủ lớn", không phải "SOTA kém"** (mục 11.7 cho thấy STID dẫn đầu trên SZ-taxi nhiều dữ liệu hơn): với METR-LA, Graph WaveNet/STAEformer giảm MAE 60 phút từ ~3.60 (DCRNN) xuống ~3.3–3.5. `tools/prepare_large_dataset.py` + `LOCAL_RUN.md` cho phép chạy lại toàn bộ trên các bộ đó.
-- Ngược lại, LightGBM có **dừng sớm riêng cho từng tầm** (số cây tốt nhất giảm từ vài trăm ở 5 phút xuống ~60 ở 60 phút) và cây quyết định khó học thuộc nhiễu hơn — đúng thứ dữ liệu nhỏ cần.
+- Ngược lại, LightGBM có **dừng sớm riêng cho từng tầm**: số cây tốt nhất khác hẳn nhau giữa các tầm (≈ 90 ở 5 phút, 200–550 ở tầm 15–45 phút, ≈ 50 ở 50–60 phút, seed 42), tức mỗi tầm tự chọn độ phức tạp phù hợp — còn mạng nơ-ron dùng một epoch chung cho cả 12 đầu ra. Cùng với việc cây quyết định khó học thuộc nhiễu hơn, đó đúng là thứ dữ liệu nhỏ cần.
 
 ### 11.4 Minh chứng — LightGBM dựa vào thông tin gì? (ảnh hưởng của thuộc tính)
 
