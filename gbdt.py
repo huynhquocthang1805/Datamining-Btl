@@ -179,6 +179,8 @@ def run(dataset, seed, L=12, H=None, threads=2, out_root=None, max_train_rows=No
     pd.DataFrame({'epoch': [1], 'val_mse_scaled': [np.nan], 'val_rmse_raw': [val_rmse]}).to_csv(out / 'history.csv', index=False)
     np.savez_compressed(out / 'test_predictions.npz', y_true=yt.astype(np.float32), y_pred=pt.astype(np.float32),
                         time_indices=sets['test'][0], sensor_ids=np.array(b.sensor_ids))
+    np.savez_compressed(out / 'val_predictions.npz', y_true=yv.astype(np.float32), y_pred=pv.astype(np.float32),
+                        time_indices=sets['val'][0])          # used by analysis/blend.py (weights fit on val)
     imp = pd.concat(importance, axis=1).fillna(0)
     imp.to_csv(out / 'feature_importance_gain.csv')
     print(f'{dataset} seed {seed}: test RMSE {sc["overall"]["RMSE"]:.3f} MAE {sc["overall"]["MAE"]:.3f} '
