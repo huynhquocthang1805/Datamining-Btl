@@ -814,7 +814,37 @@ So với bài báo (cách tính gộp của tác giả): trộn theo tầm đạ
 
 ### 11.7 SZ-taxi
 
-SZ_MODERN_SECTION
+Cùng các hướng trên SZ-taxi (22 ngày train, mục tiêu ≠ 0; Graph WaveNet/DCRNN không chạy trên SZ-taxi vì giới hạn CPU):
+
+| Mô hình | nhóm | seed | tham số | RMSE val | RMSE test | MAE test | 15 phút | 60 phút | phút/run |
+|---|---|---|---|---|---|---|---|---|---|
+| Trộn theo tầm: LightGBM v2, 127 lá (chọn theo val) + STID + residual + GRU-RTP (+ hồ sơ giờ) + GRU | ensemble | 3 | — | — | 4.402 | 3.106 | 4.35 / 3.06 | 4.44 / 3.14 | — |
+| STID | hiện đại | 3 | 108,292 | 3.829 | 4.445 ± 0.009 | 3.140 ± 0.005 | 4.39 / 3.09 | 4.49 / 3.18 | 4 |
+| STID + residual | hiện đại | 3 | 108,292 | 3.829 | 4.449 ± 0.007 | 3.143 ± 0.009 | 4.38 / 3.09 | 4.50 / 3.18 | 4 |
+| Ensemble LightGBM v2, 127 lá (chọn theo val) (3 seed) | ensemble | 3 | — | — | 4.484 | 3.163 | 4.44 / 3.12 | 4.51 / 3.19 | — |
+| Ensemble LightGBM + GRU-RTP (+ hồ sơ giờ) | ensemble | 3 | — | — | 4.486 | 3.174 | 4.44 / 3.13 | 4.52 / 3.21 | — |
+| LightGBM v2, 127 lá (chọn theo val) | khai phá dữ liệu | 3 | — | 3.853 | 4.494 ± 0.002 | 3.170 ± 0.001 | 4.45 / 3.13 | 4.53 / 3.20 | 3 |
+| LightGBM (đặc trưng KG-TG) | khai phá dữ liệu | 3 | — | 3.899 | 4.523 ± 0.002 | 3.199 ± 0.001 | 4.46 / 3.14 | 4.57 / 3.24 | 4 |
+| Ensemble GRU-RTP (+ hồ sơ giờ) (3 seed) | ensemble | 3 | — | — | 4.567 | 3.250 | 4.49 / 3.18 | 4.63 / 3.31 | — |
+| GRU-RTP (+ hồ sơ giờ) | hồ sơ giờ | 3 | 14,100 | 3.979 | 4.584 ± 0.018 | 3.265 ± 0.016 | 4.50 / 3.19 | 4.64 / 3.32 | 6 |
+| GRU-RT | phần 1 | 1 | 13,892 | 3.977 | 4.615 | 3.265 | 4.53 / 3.19 | 4.69 / 3.33 | 17 |
+| Ensemble GRU-RT (3 seed) | ensemble | 3 | — | — | 4.615 | 3.265 | 4.53 / 3.19 | 4.69 / 3.33 | — |
+| GRU | paper | 3 | 13,124 | 3.970 | 4.619 ± 0.001 | 3.269 ± 0.002 | 4.52 / 3.19 | 4.70 / 3.34 | 10 |
+| Hồi quy tuyến tính | baseline | 1 | — | — | 4.661 | 3.348 | 4.55 / 3.25 | 4.76 / 3.43 | — |
+| T-GCN | paper | 3 | 12,932 | 4.019 | 4.694 ± 0.004 | 3.346 ± 0.004 | 4.62 / 3.29 | 4.76 / 3.40 | 30 |
+| T-GCN-RT | phần 1 | 1 | 13,700 | 4.583 | 5.280 | 3.780 | 5.16 / 3.68 | 5.37 / 3.85 | 29 |
+| Persistence | baseline | 1 | — | — | 6.012 | 4.262 | 5.84 / 4.14 | 6.15 / 4.36 | — |
+
+*RMSE / MAE trung bình 12 tầm; "15 phút", "60 phút" = RMSE / MAE tại đúng bước đó; thời gian train trên 1 nhân CPU, có tranh chấp.*
+
+![Hình 24. SZ-taxi: xếp hạng mọi mô hình (mục tiêu ≠ 0)](figures/modern_ranking_sztaxi.png)
+
+Trên SZ-taxi, bức tranh **đảo ngược** so với Los-loop — và chính sự đảo ngược đó là minh chứng:
+
+- **STID là mô hình đơn tốt nhất (4.445 ± 0.009 / 3.140)**, hơn LightGBM v2 (4.494) và GRU (4.619); mọi khác biệt so với ensemble GRU-RT đều có ý nghĩa (p < 10⁻⁴). Trộn theo tầm (STID 0.75–0.80, LightGBM 0.10–0.20) đạt **4.402 / 3.106**, giảm 4.7% RMSE và 5.0% MAE so với GRU.
+- **Vì sao STID thắng ở đây mà thua ở Los-loop?** Embedding "danh tính cảm biến" và "khung giờ" của STID thực chất **tự học hồ sơ theo giờ của từng cảm biến** — đúng tri thức mà LightGBM nhận qua đặc trưng thiết kế tay. Với SZ-taxi mỗi khung giờ được thấy ~22 lần trong train, đủ để học; với Los-loop chỉ ~5 lần, nên STID quá khớp. Cùng một ý tưởng, hai kết luận ngược nhau — phụ thuộc vào lượng dữ liệu.
+- LightGBM v2 (thêm bất thường láng giềng/toàn mạng) cải thiện rõ trên SZ-taxi (4.494 so với 4.523 của v1), khác với Los-loop: đặc trưng trạng thái toàn mạng hữu ích hơn trên chuỗi nhiễu, nơi trung bình hóa nhiều cảm biến lọc được nhiễu.
+- Residual tiếp tục không giúp trên dữ liệu nhiễu (STID + residual 4.449 ≈ STID 4.445), nhất quán với mục 10.
 
 ### 11.8 Mô hình cuối cùng mới và cách đọc lên để dự báo
 

@@ -77,7 +77,18 @@ So với bài báo (cách tính gộp của tác giả): trộn theo tầm đạ
 
 ### 11.7 SZ-taxi
 
-SZ_MODERN_SECTION
+Cùng các hướng trên SZ-taxi (22 ngày train, mục tiêu ≠ 0; Graph WaveNet/DCRNN không chạy trên SZ-taxi vì giới hạn CPU):
+
+SZ_MODERN_TABLE
+
+![Hình 24. SZ-taxi: xếp hạng mọi mô hình (mục tiêu ≠ 0)](figures/modern_ranking_sztaxi.png)
+
+Trên SZ-taxi, bức tranh **đảo ngược** so với Los-loop — và chính sự đảo ngược đó là minh chứng:
+
+- **STID là mô hình đơn tốt nhất (4.445 ± 0.009 / 3.140)**, hơn LightGBM v2 (4.494) và GRU (4.619); mọi khác biệt so với ensemble GRU-RT đều có ý nghĩa (p < 10⁻⁴). Trộn theo tầm (STID 0.75–0.80, LightGBM 0.10–0.20) đạt **4.402 / 3.106**, giảm 4.7% RMSE và 5.0% MAE so với GRU.
+- **Vì sao STID thắng ở đây mà thua ở Los-loop?** Embedding "danh tính cảm biến" và "khung giờ" của STID thực chất **tự học hồ sơ theo giờ của từng cảm biến** — đúng tri thức mà LightGBM nhận qua đặc trưng thiết kế tay. Với SZ-taxi mỗi khung giờ được thấy ~22 lần trong train, đủ để học; với Los-loop chỉ ~5 lần, nên STID quá khớp. Cùng một ý tưởng, hai kết luận ngược nhau — phụ thuộc vào lượng dữ liệu.
+- LightGBM v2 (thêm bất thường láng giềng/toàn mạng) cải thiện rõ trên SZ-taxi (4.494 so với 4.523 của v1), khác với Los-loop: đặc trưng trạng thái toàn mạng hữu ích hơn trên chuỗi nhiễu, nơi trung bình hóa nhiều cảm biến lọc được nhiễu.
+- Residual tiếp tục không giúp trên dữ liệu nhiễu (STID + residual 4.449 ≈ STID 4.445), nhất quán với mục 10.
 
 ### 11.8 Mô hình cuối cùng mới và cách đọc lên để dự báo
 

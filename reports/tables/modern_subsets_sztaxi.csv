@@ -39,13 +39,13 @@ lgbm_best,60 phút,cao điểm,3.1677494049072266
 lgbm_best,60 phút,ngoài cao điểm,3.200274705886841
 lgbm_best,60 phút,kẹt xe (v<10),2.7741801738739014
 lgbm_best,60 phút,biến động mạnh (Δ>10),8.094450950622559
-blend,15 phút,tất cả,3.1109299659729004
-blend,15 phút,cao điểm,3.0753672122955322
-blend,15 phút,ngoài cao điểm,3.1178650856018066
-blend,15 phút,kẹt xe (v<10),2.6961669921875
-blend,15 phút,biến động mạnh (Δ>10),8.62501049041748
-blend,60 phút,tất cả,3.184432029724121
-blend,60 phút,cao điểm,3.1569392681121826
-blend,60 phút,ngoài cao điểm,3.1897950172424316
-blend,60 phút,kẹt xe (v<10),2.797307252883911
-blend,60 phút,biến động mạnh (Δ>10),8.213968276977539
+blend,15 phút,tất cả,3.0633203983306885
+blend,15 phút,cao điểm,3.0266456604003906
+blend,15 phút,ngoài cao điểm,3.070472240447998
+blend,15 phút,kẹt xe (v<10),2.69474196434021
+blend,15 phút,biến động mạnh (Δ>10),8.320054054260254
+blend,60 phút,tất cả,3.136749744415283
+blend,60 phút,cao điểm,3.1168954372406006
+blend,60 phút,ngoài cao điểm,3.140623092651367
+blend,60 phút,kẹt xe (v<10),2.778578996658325
+blend,60 phút,biến động mạnh (Δ>10),7.901696681976318
