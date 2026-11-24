@@ -19,7 +19,7 @@ python -m unittest discover -s tests -v
 
 ## 1. Những gì đã chạy xong trong repo (không cần chạy lại)
 
-GRU, GCN, T-GCN, các cải tiến, tinh chỉnh, tái lập giao thức tác giả (3 seed), STID, DCRNN-lite, Graph WaveNet bản gọn (1 seed), LightGBM (3 seed), GRU/T-GCN với hồ sơ theo giờ. Bảng kết quả: `reports/tables/`, báo cáo: `reports/BAO_CAO_TGCN.md`.
+GRU, GCN, T-GCN, các cải tiến, tinh chỉnh, tái lập giao thức tác giả (3 seed), STID (3 seed), DCRNN-lite (1 seed), Graph WaveNet bản gọn (+ residual 3 seed), LightGBM (3 seed), GRU/T-GCN với hồ sơ theo giờ, trộn theo tầm. Bảng kết quả: `reports/tables/`, báo cáo: `reports/BAO_CAO_TGCN.md`.
 
 ## 2. Mô hình cỡ đầy đủ trên GPU (khuyến nghị)
 

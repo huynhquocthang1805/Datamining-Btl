@@ -8,7 +8,7 @@
 
 **Hướng phát triển (theo thứ tự lợi ích kỳ vọng / chi phí)**
 
-1. **Đưa vào sử dụng ngay:** trộn LightGBM + GRU-RT theo tầm (mục 11), kèm bước kiểm tra/điền giá trị thiếu ở đầu vào và cắt dự báo về [0, v_max].
+1. **Đưa vào sử dụng ngay:** trộn LightGBM + Graph WaveNet-residual theo tầm (mục 11), kèm bước kiểm tra/điền giá trị thiếu ở đầu vào và cắt dự báo về [0, v_max].
 2. **Chạy các kiến trúc hiện đại trên dữ liệu đủ lớn** (METR-LA, PEMS-BAY — `LOCAL_RUN.md`): Graph WaveNet, STAEformer cỡ đầy đủ trên GPU, để kiểm chứng xem lợi thế của chúng có xuất hiện khi không bị giới hạn bởi 5 ngày dữ liệu.
 3. **Đưa hồ sơ theo giờ vào mạng nơ-ron một cách có điều chuẩn**: hiện GRU-RTP/T-GCN-RTSP quá khớp sau 6–11 epoch; nên thử dropout/weight decay mạnh hơn, hoặc dừng sớm riêng cho từng tầm như LightGBM.
 4. **Dự báo phân vị / conformal theo giờ** để khoảng dự báo đạt độ phủ đúng cả trong giờ cao điểm.
@@ -21,7 +21,7 @@ Chúng tôi đã cài đặt lại và chạy GRU, GCN, T-GCN cùng 4 baseline c
 
 Cải tiến hiệu quả nhất trên Los-loop không nằm ở đồ thị mà ở **cách đặt bài toán**: học phần thay đổi so với giá trị cuối (residual) và cho mô hình biết giờ trong ngày; ensemble 3 seed của GRU-RT giảm RMSE 7.8% so với GRU và 8.0% so với T-GCN (có ý nghĩa thống kê), vượt mọi con số trong bài báo dù dùng giao thức chặt hơn. Nhưng cải tiến phụ thuộc dữ liệu: trên SZ-taxi (nhiễu, nhiều giá trị thiếu) residual không giúp, và mọi mô hình chỉ hơn trung bình trượt vài phần trăm. Đồ thị có giá trị thật — ở tầm xa, khi tốc độ biến động mạnh, khi dữ liệu nhiễu — nhưng chỉ khi được thiết kế để không xóa mờ thông tin riêng của từng nút.
 
-Phần cải tiến nâng cao (mục 11) củng cố kết luận đó theo hướng khai phá dữ liệu: **thông tin đúng quan trọng hơn kiến trúc phức tạp**. Một mô hình LightGBM với đặc trưng thiết kế từ hiểu biết về giao thông — đặc biệt là hồ sơ tốc độ theo khung giờ của từng cảm biến — vượt mọi mạng nơ-ron (kể cả các kiến trúc 2019–2023) trên dữ liệu nhỏ này, khắc phục điểm yếu giờ cao điểm, và khi trộn theo tầm với GRU-RT (trọng số học trên validation) cho sai số thấp hơn 16% so với T-GCN gốc. Các kiến trúc hiện đại cần được đánh giá lại trên dữ liệu nhiều tháng trước khi kết luận.
+Phần cải tiến nâng cao (mục 11) củng cố kết luận đó theo hướng khai phá dữ liệu: **thông tin đúng quan trọng hơn kiến trúc phức tạp**. Một mô hình LightGBM với đặc trưng thiết kế từ hiểu biết về giao thông — đặc biệt là hồ sơ tốc độ theo khung giờ của từng cảm biến — là mô hình đơn tốt nhất trên dữ liệu nhỏ này và khắc phục điểm yếu giờ cao điểm. Trong các kiến trúc hiện đại, chỉ Graph WaveNet *kết hợp với residual* tiến sát nó; trộn hai họ mô hình này theo tầm (trọng số học trên validation) cho sai số thấp hơn 18% (RMSE) và 20% (MAE) so với T-GCN gốc. Trên SZ-taxi nhiều dữ liệu hơn, STID — mô hình tự học "hồ sơ" qua embedding — lại dẫn đầu: cùng một tri thức, được học tự động khi đủ dữ liệu hoặc được đưa vào bằng tay khi thiếu dữ liệu.
 
 ## Phụ lục A. Cách chạy lại toàn bộ
 

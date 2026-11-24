@@ -14,8 +14,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 import torch
 
-SINGLE = {'losloop': [('main', 'gru'), ('main', 'tgcn'), ('improve', 'tgcn_selfsep'), ('improve', 'tgcn_res_time')],
-          'sztaxi': [('main', 'tgcn')]}
+SINGLE = {'losloop': [('main', 'gru'), ('main', 'tgcn'), ('improve', 'tgcn_selfsep'), ('improve', 'tgcn_res_time'),
+                      ('modern', 'gwnet_res'), ('modern', 'tgcn_rtsp')],
+          'sztaxi': [('main', 'tgcn'), ('modern', 'stid')]}
 FINAL = {'losloop': ('improve', 'gru_res_time'), 'sztaxi': ('main', 'gru')}   # chosen by validation RMSE
 
 

@@ -17,9 +17,9 @@ Chúng tôi cài đặt lại GRU, GCN và T-GCN (Zhao et al., 2019) bằng PyTo
 
 **Cải tiến nâng cao (mục 11).** Áp dụng thêm kiến trúc hiện đại (STID, DCRNN, Graph WaveNet, STAEformer), một mô hình khai phá dữ liệu cổ điển (LightGBM với ~50 đặc trưng không gian–thời gian) và trộn theo từng tầm dự báo với trọng số học trên validation:
 
-7. **Kết quả tốt nhất: trộn LightGBM + GRU-RT theo tầm, RMSE 6.29 / MAE 3.58 trên Los-loop** — giảm 16% RMSE so với GRU/T-GCN gốc, 9% so với ensemble GRU-RT (p = 0.001); theo cách tính của bài báo: "15 phút" 4.81 / 2.80 và "60 phút" 6.29 / 3.58 so với 5.13 / 3.18 và 7.27 / 4.60 của T-GCN trong bài báo.
+7. **Kết quả tốt nhất: trộn LightGBM + Graph WaveNet-residual theo tầm, RMSE 6.19 / MAE 3.49 trên Los-loop** — giảm 18% RMSE và 20% MAE so với T-GCN gốc, 10% so với ensemble GRU-RT (p = 0.0002); theo cách tính của bài báo: "15 phút" 4.74 / 2.75 và "60 phút" 6.19 / 3.49 so với 5.13 / 3.18 và 7.27 / 4.60 của T-GCN trong bài báo. Trên SZ-taxi: trộn STID + LightGBM 4.40 / 3.11 (mục tiêu ≠ 0), giảm 4.7% so với GRU.
 8. **Chìa khóa là kiến thức miền, không phải kiến trúc:** đặc trưng quan trọng nhất là *hồ sơ tốc độ theo khung giờ của từng cảm biến* (~50–65% tầm quan trọng). Nhờ nó, giờ cao điểm — điểm yếu ở trên — được khắc phục: lần đầu có mô hình thắng persistence trong cao điểm ở 15 phút, và giảm 19% MAE ở 60 phút.
-9. **Kiến trúc SOTA "nguyên bản" quá khớp trên 5 ngày dữ liệu** (STID 7.43 ± 0.21, DCRNN-lite 7.56) — kết luận về chúng cần dữ liệu lớn hơn; mã và hướng dẫn chạy trên GPU / METR-LA / PEMS-BAY ở `LOCAL_RUN.md`.
+9. **Kiến trúc hiện đại: phụ thuộc dữ liệu và cách đặt bài toán.** Trên Los-loop (5 ngày train), STID và DCRNN-lite quá khớp (7.43, 7.56), còn **Graph WaveNet + residual là mạng nơ-ron tốt nhất (6.59 / 3.67)**; trên SZ-taxi (22 ngày) STID lại là mô hình đơn tốt nhất. Cấu hình đầy đủ (STAEformer, Graph WaveNet full) và dữ liệu lớn (METR-LA / PEMS-BAY) để chạy trên GPU: `LOCAL_RUN.md`.
 
 **Mục lục:** 1. Ý tưởng · 2. Dữ liệu & kiểm tra dữ liệu · 3. Phương pháp · 4. Phản biện bài báo · 5. Kết quả 3 giai đoạn · 6. Mô hình huấn luyện được & cách dùng · 7. Minh chứng – giải thích cơ chế · 8. Độ tin cậy · 9. So sánh với bài báo · 10. SZ-taxi · 11. Cải tiến nâng cao: mô hình hiện đại, LightGBM, trộn theo tầm · 12. Hạn chế & hướng phát triển · 13. Kết luận
 
@@ -677,21 +677,23 @@ Sau mục 5, mô hình tốt nhất là ensemble GRU-RT (RMSE 6.91 / MAE 4.01) v
 | C. Chuyển kiến thức B → học sâu | **GRU-RTP**, **T-GCN-RTSP** | thêm hồ sơ theo giờ của cảm biến làm đầu vào và "thay đổi hồ sơ dự kiến tới t+k" vào đầu ra |
 | D. Kết hợp | **Trộn theo từng tầm** | trọng số không âm (tổng 1) cho từng tầm dự báo, **tối ưu trên validation**, rồi mới áp dụng lên test |
 
-STAEformer (83–390 s/epoch trên CPU) và Graph WaveNet cỡ đầy đủ được để chạy trên GPU (`LOCAL_RUN.md`); ở đây Graph WaveNet bản gọn chạy 1 seed.
+STAEformer (83–390 s/epoch trên CPU) và Graph WaveNet cỡ đầy đủ được để chạy trên GPU (`LOCAL_RUN.md`); ở đây Graph WaveNet bản gọn chạy 1 seed không residual và 3 seed có residual (≈ 30–50 phút/run trên CPU).
 
 ### 11.2 Kết quả trên Los-loop
 
 | Mô hình | nhóm | seed | tham số | RMSE val | RMSE test | MAE test | 15 phút | 60 phút | phút/run |
 |---|---|---|---|---|---|---|---|---|---|
-| Trộn theo tầm: LightGBM v2, 127 lá (chọn theo val) + T-GCN-RTSP (+ hồ sơ giờ) + GRU-RTP (+ hồ sơ giờ) + GRU-RT | ensemble | 3 | — | — | 6.286 | 3.575 | 5.46 / 3.15 | 7.35 / 4.25 | — |
+| Trộn theo tầm: LightGBM v2, 127 lá (chọn theo val) + Graph WaveNet + residual + GRU-RT + T-GCN-RTSP (+ hồ sơ giờ) | ensemble | 3 | — | — | 6.190 | 3.494 | 5.37 / 3.08 | 7.20 / 4.11 | — |
 | Ensemble LightGBM v2, 127 lá (chọn theo val) (3 seed) | ensemble | 3 | — | — | 6.438 | 3.578 | 5.63 / 3.17 | 7.46 / 4.21 | — |
 | Ensemble LightGBM + GRU-RTP (+ hồ sơ giờ) | ensemble | 3 | — | — | 6.452 | 3.726 | 5.65 / 3.30 | 7.49 / 4.41 | — |
 | LightGBM v2, 127 lá (chọn theo val) | khai phá dữ liệu | 3 | — | 5.339 | 6.467 ± 0.000 | 3.595 ± 0.005 | 5.66 / 3.19 | 7.48 / 4.22 | 5 |
 | LightGBM (đặc trưng KG-TG) | khai phá dữ liệu | 3 | — | 5.353 | 6.477 ± 0.020 | 3.618 ± 0.015 | 5.66 / 3.20 | 7.49 / 4.24 | 4 |
 | LightGBM v2 (+ bất thường láng giềng/toàn mạng) | khai phá dữ liệu | 1 | — | 5.348 | 6.481 | 3.613 | 5.67 / 3.20 | 7.54 / 4.27 | 6 |
+| Graph WaveNet + residual | hiện đại | 3 | 165,624 | 5.370 | 6.589 ± 0.117 | 3.674 ± 0.035 | 5.60 / 3.20 | 7.75 / 4.35 | 36 |
 | T-GCN-RTSP (+ hồ sơ giờ) | hồ sơ giờ | 3 | 27,996 | 5.664 | 6.685 ± 0.026 | 4.100 ± 0.091 | 5.81 / 3.54 | 7.82 / 4.96 | 20 |
 | Ensemble GRU-RTP (+ hồ sơ giờ) (3 seed) | ensemble | 3 | — | — | 6.809 | 4.034 | 5.97 / 3.55 | 7.93 / 4.81 | — |
 | GRU-RTP (+ hồ sơ giờ) | hồ sơ giờ | 3 | 14,748 | 5.652 | 6.829 ± 0.006 | 4.054 ± 0.054 | 5.99 / 3.57 | 7.95 / 4.83 | 18 |
+| Graph WaveNet | hiện đại | 1 | 165,624 | 5.592 | 6.860 | 4.164 | 5.85 / 3.68 | 8.06 / 4.87 | 42 |
 | Ensemble GRU-RT (3 seed) | ensemble | 3 | — | — | 6.911 | 4.012 | 5.80 / 3.38 | 8.29 / 4.97 | — |
 | GRU-RT | phần 1 | 3 | 14,412 | 5.906 | 6.981 ± 0.063 | 4.065 ± 0.063 | 5.84 / 3.43 | 8.39 / 5.04 | 13 |
 | T-GCN-RTS | phần 1 | 3 | 27,468 | 5.937 | 7.219 ± 0.054 | 4.156 ± 0.052 | 5.93 / 3.50 | 8.75 / 5.11 | 13 |
@@ -719,21 +721,24 @@ Kiểm định cặp so với mô hình tốt nhất của phần trước (ense
 | DCRNN-lite | ensemble GRU-RT | +0.952 | [+0.469; +1.490] | 0.0029 | B tốt hơn |
 | DCRNN-lite + residual | ensemble GRU-RT | +0.650 | [+0.383; +0.966] | 0.0003 | B tốt hơn |
 | GRU-RTP (+ hồ sơ giờ) (TB 3 seed) | ensemble GRU-RT | -0.101 | [-0.450; +0.215] | 0.5646 | không khác biệt |
-| LightGBM (đặc trưng KG-TG) (TB 3 seed) | ensemble GRU-RT | -0.461 | [-0.906; -0.107] | 0.0344 | A tốt hơn |
-| LightGBM v2, 127 lá (chọn theo val) (TB 3 seed) | ensemble GRU-RT | -0.473 | [-0.935; -0.102] | 0.0337 | A tốt hơn |
-| STID (TB 3 seed) | ensemble GRU-RT | +0.323 | [+0.095; +0.572] | 0.0163 | B tốt hơn |
-| STID + residual (TB 3 seed) | ensemble GRU-RT | +0.385 | [+0.081; +0.728] | 0.0367 | B tốt hơn |
-| T-GCN-RTSP (+ hồ sơ giờ) (TB 3 seed) | ensemble GRU-RT | -0.307 | [-0.640; -0.018] | 0.0793 | không khác biệt |
-| Ensemble LightGBM v2, 127 lá (chọn theo val) (3 seed) | ensemble GRU-RT | -0.473 | [-0.924; -0.099] | 0.0337 | A tốt hơn |
-| Ensemble LightGBM + GRU-RTP (+ hồ sơ giờ) | ensemble GRU-RT | -0.458 | [-0.861; -0.117] | 0.0255 | A tốt hơn |
-| Trộn theo tầm (fit trên val) | ensemble GRU-RT | -0.625 | [-0.974; -0.337] | 0.0010 | A tốt hơn |
-| GRU-RTP (3 seed) | GRU-RT (3 seed) | -0.101 | [-0.450; +0.195] | 0.5646 | không khác biệt |
+| Graph WaveNet | ensemble GRU-RT | -0.050 | [-0.319; +0.167] | 0.6945 | không khác biệt |
+| Graph WaveNet + residual (TB 3 seed) | ensemble GRU-RT | -0.448 | [-0.742; -0.210] | 0.0028 | A tốt hơn |
+| LightGBM (đặc trưng KG-TG) (TB 3 seed) | ensemble GRU-RT | -0.461 | [-0.913; -0.114] | 0.0344 | A tốt hơn |
+| LightGBM v2, 127 lá (chọn theo val) (TB 3 seed) | ensemble GRU-RT | -0.473 | [-0.909; -0.104] | 0.0337 | A tốt hơn |
+| STID (TB 3 seed) | ensemble GRU-RT | +0.323 | [+0.093; +0.560] | 0.0163 | B tốt hơn |
+| STID + residual (TB 3 seed) | ensemble GRU-RT | +0.385 | [+0.075; +0.730] | 0.0367 | B tốt hơn |
+| T-GCN-RTSP (+ hồ sơ giờ) (TB 3 seed) | ensemble GRU-RT | -0.307 | [-0.643; -0.011] | 0.0793 | không khác biệt |
+| Ensemble LightGBM v2, 127 lá (chọn theo val) (3 seed) | ensemble GRU-RT | -0.473 | [-0.920; -0.111] | 0.0337 | A tốt hơn |
+| Ensemble LightGBM + GRU-RTP (+ hồ sơ giờ) | ensemble GRU-RT | -0.458 | [-0.848; -0.129] | 0.0255 | A tốt hơn |
+| Trộn theo tầm (fit trên val) | ensemble GRU-RT | -0.720 | [-1.073; -0.441] | 0.0002 | A tốt hơn |
+| GRU-RTP (3 seed) | GRU-RT (3 seed) | -0.101 | [-0.446; +0.204] | 0.5646 | không khác biệt |
 
-Ba kết luận:
+Bốn kết luận:
 
-1. **Mô hình tốt nhất mới là trộn theo tầm (RMSE 6.29 / MAE 3.58)** — giảm 9% RMSE so với ensemble GRU-RT (p = 0.001), **16% so với GRU và T-GCN gốc**. LightGBM một mình (6.47 / 3.60) đã hơn mọi mô hình học sâu (p = 0.03 so với ensemble GRU-RT) và cực kỳ ổn định giữa các seed (± 0.001).
-2. **Kiến trúc hiện đại "nguyên bản" không thắng trên Los-loop**: STID 7.43 ± 0.21, DCRNN-lite 7.56–7.86 — kém cả ensemble GRU-RT có ý nghĩa thống kê.
-3. **Đưa hồ sơ theo giờ vào mạng nơ-ron giúp ở tầm xa** (GRU-RTP 60 phút: 7.95 so với 8.39 của GRU-RT; T-GCN-RTSP là mô hình học sâu tốt nhất, 6.69) nhưng làm tệ đi ở 5 phút và **chưa có ý nghĩa thống kê** so với GRU-RT (p = 0.56 và 0.08).
+1. **Mô hình tốt nhất mới là trộn theo tầm LightGBM + Graph WaveNet-residual (+ GRU-RT): RMSE 6.19 / MAE 3.49** — giảm 10% RMSE so với ensemble GRU-RT (p = 0.0002), **18% RMSE và 20% MAE so với T-GCN gốc**, 17% / 16% so với GRU.
+2. **LightGBM với đặc trưng thiết kế tay là mô hình đơn tốt nhất (6.47 / 3.60)**, cực kỳ ổn định giữa các seed (± 0.001), hơn ensemble GRU-RT có ý nghĩa (p = 0.03).
+3. **Kiến trúc hiện đại: kết quả phân hóa.** **Graph WaveNet + residual (6.59 ± 0.12 / 3.67)** là mô hình đơn tốt thứ hai và là mạng nơ-ron tốt nhất (p = 0.003 so với ensemble GRU-RT) — nhưng *không có residual* thì chỉ 6.86 (không khác biệt có ý nghĩa). STID (7.43 ± 0.21) và DCRNN-lite (7.56–7.86) kém hơn ensemble GRU-RT có ý nghĩa.
+4. **Đưa hồ sơ theo giờ vào mạng nơ-ron giúp ở tầm xa** (GRU-RTP 60 phút: 7.95 so với 8.39 của GRU-RT; T-GCN-RTSP 6.69) nhưng làm tệ đi ở 5 phút và **chưa có ý nghĩa thống kê** so với GRU-RT (p = 0.56 và 0.08).
 
 ### 11.3 Phản biện — vì sao các mô hình SOTA không thắng ở đây
 
@@ -741,7 +746,8 @@ Các kiến trúc này được thiết kế và báo cáo trên METR-LA/PEMS-BA
 
 - **Số tham số so với dữ liệu:** STID 117 nghìn, DCRNN-lite 67 nghìn, Graph WaveNet 166 nghìn so với 13–14 nghìn của GRU/T-GCN. Embedding thời gian của STID có 288 khung giờ × 32 chiều nhưng mỗi khung chỉ được thấy ~5 lần.
 - **Dấu hiệu quá khớp đo được:** epoch tốt nhất của STID là 4–11, DCRNN-lite 25–27, GRU-RTP 6–11, T-GCN-RTSP 6–11 (GRU-RT: 19–37; GRU: 87–101), và độ lệch giữa các seed của STID lớn gấp 30 lần GRU (0.21 so với 0.006).
-- **Kết luận đúng là "chưa kiểm chứng được trên dữ liệu đủ lớn", không phải "SOTA kém"**: với METR-LA, Graph WaveNet/STAEformer giảm MAE 60 phút từ ~3.60 (DCRNN) xuống ~3.3–3.5. `tools/prepare_large_dataset.py` + `LOCAL_RUN.md` cho phép chạy lại toàn bộ trên các bộ đó.
+- **Ngoại lệ có tính hướng dẫn — Graph WaveNet + residual:** cũng quá khớp sớm (epoch tốt nhất 10–13) nhưng vẫn tốt: tích chập thời gian giãn nở + khuếch tán đồ thị hai chiều + đồ thị thích nghi cho biểu diễn đủ mạnh, còn residual (học Δ so với giá trị cuối — phát hiện ở mục 5.4) giữ cho mô hình không bao giờ tệ hơn persistence ở tầm ngắn. Bỏ residual: 6.86. Mẹo "đặt bài toán đúng" quan trọng ngang kiến trúc.
+- **Kết luận đúng là "chưa kiểm chứng được trên dữ liệu đủ lớn", không phải "SOTA kém"** (mục 11.7 cho thấy STID dẫn đầu trên SZ-taxi nhiều dữ liệu hơn): với METR-LA, Graph WaveNet/STAEformer giảm MAE 60 phút từ ~3.60 (DCRNN) xuống ~3.3–3.5. `tools/prepare_large_dataset.py` + `LOCAL_RUN.md` cho phép chạy lại toàn bộ trên các bộ đó.
 - Ngược lại, LightGBM có **dừng sớm riêng cho từng tầm** (số cây tốt nhất giảm từ vài trăm ở 5 phút xuống ~60 ở 60 phút) và cây quyết định khó học thuộc nhiễu hơn — đúng thứ dữ liệu nhỏ cần.
 
 ### 11.4 Minh chứng — LightGBM dựa vào thông tin gì? (ảnh hưởng của thuộc tính)
@@ -781,7 +787,7 @@ Tỉ trọng gain theo nhóm thông tin (trung bình 3 seed):
 | GRU-RT (TB 3 seed) | 3.383 | 4.504 | 3.021 | 7.551 | 14.511 |
 | GRU-RTP (TB 3 seed) | 3.551 | 4.751 | 3.163 | 8.222 | 13.148 |
 | LightGBM (TB 3 seed) | 3.168 | 4.153 | 2.85 | 6.811 | 13.175 |
-| Trộn theo tầm | 3.146 | 4.115 | 2.833 | 6.823 | 13.528 |
+| Trộn theo tầm | 3.078 | 4.04 | 2.768 | 6.794 | 13.288 |
 
 **MAE – dự báo trước 60 phút**
 
@@ -791,26 +797,28 @@ Tỉ trọng gain theo nhóm thông tin (trung bình 3 seed):
 | GRU-RT (TB 3 seed) | 4.972 | 8.018 | 3.987 | 13.259 | 14.896 |
 | GRU-RTP (TB 3 seed) | 4.812 | 7.237 | 4.029 | 13.168 | 12.959 |
 | LightGBM (TB 3 seed) | 4.209 | 5.994 | 3.632 | 10.42 | 12.832 |
-| Trộn theo tầm | 4.247 | 6.243 | 3.601 | 10.778 | 13.1 |
+| Trộn theo tầm | 4.107 | 5.876 | 3.536 | 10.681 | 12.581 |
 
-- Lần đầu tiên có mô hình **thắng persistence trong giờ cao điểm ở 15 phút** (LightGBM 4.15, trộn 4.12 so với 4.20) và thắng rất xa ở 60 phút (LightGBM 5.99 so với 7.44 — giảm 19%; GRU-RT 8.02).
+- Lần đầu tiên có mô hình **thắng persistence trong giờ cao điểm ở 15 phút** (LightGBM 4.15, trộn 4.04 so với 4.20) và thắng rất xa ở 60 phút (trộn 5.88, LightGBM 5.99 so với 7.44 của persistence — giảm 19–21%; GRU-RT 8.02).
 - Khi kẹt xe (v < 40 mph), MAE 60 phút giảm từ 13.3 (GRU-RT) xuống 10.4 (LightGBM): mô hình biết rằng cảm biến *đang trong khung giờ thường kẹt* nên không vội dự báo "sắp thông".
 
-### 11.6 Trộn theo tầm — vì sao các thành viên "kém hơn" vẫn có ích
+### 11.6 Trộn theo tầm — vì sao thành viên "kém hơn" vẫn có ích
 
 ![Hình 23. Trọng số trộn theo tầm dự báo (fit trên validation)](figures/blend_weights_losloop.png)
 
-| Tầm | lgbm_best | T-GCN-RTSP | GRU-RTP | GRU-RT |
+| Tầm | LightGBM | gwnet_res | GRU-RT | T-GCN-RTSP |
 |---|---|---|---|---|
-| 5 phút | 0.65 | 0.0 | 0.0 | 0.35 |
-| 15 phút | 0.55 | 0.05 | 0.0 | 0.4 |
-| 30 phút | 0.65 | 0.0 | 0.0 | 0.35 |
-| 45 phút | 0.7 | 0.0 | 0.0 | 0.3 |
-| 60 phút | 0.75 | 0.0 | 0.0 | 0.25 |
+| 5 phút | 0.45 | 0.5 | 0.05 | 0.0 |
+| 15 phút | 0.35 | 0.6 | 0.05 | 0.0 |
+| 30 phút | 0.4 | 0.55 | 0.05 | 0.0 |
+| 45 phút | 0.4 | 0.5 | 0.05 | 0.05 |
+| 60 phút | 0.5 | 0.45 | 0.05 | 0.0 |
 
-Trọng số tối ưu trên validation: LightGBM tăng dần theo tầm (0.55 → 0.75), GRU-RT giảm dần (0.35 → 0.25); **GRU-RTP và T-GCN-RTSP — dù tốt hơn GRU-RT khi đứng một mình — nhận trọng số 0**, vì chúng dùng cùng thông tin hồ sơ như LightGBM nên sai số trùng nhau. Ensemble cần thành viên *đa dạng*, không cần thành viên mạnh nhất. Đây cũng là lý do ensemble LightGBM + GRU-RTP chia đều (6.45) kém hơn trộn có trọng số (6.29).
+Trọng số tối ưu trên validation chia gần đều cho **LightGBM (~0.40) và Graph WaveNet-residual (~0.50)**, GRU-RT nhận ~0.05, T-GCN-RTSP gần 0. Hai mô hình đơn tốt nhất ở đây thuộc **hai họ rất khác nhau** — cây quyết định trên đặc trưng thiết kế tay và mạng nơ-ron đồ thị học biểu diễn trực tiếp — nên sai số của chúng ít tương quan và trộn lại giảm thêm 4–6% RMSE so với từng mô hình.
 
-So với bài báo (cách tính gộp của tác giả): trộn theo tầm đạt "15 phút" RMSE 4.81 / MAE 2.80 / Accuracy 0.918 / R² 0.880 và "60 phút" 6.29 / 3.57 / 0.893 / 0.794 — so với T-GCN trong bài báo 5.13 / 3.18 / 0.913 / 0.863 và 7.27 / 4.60 / 0.876 / 0.728 (giảm 6% và 14% RMSE, 12% và 22% MAE), dù giao thức chặt hơn.
+Bản trộn trước khi có Graph WaveNet (LightGBM + GRU-RT + GRU-RTP + T-GCN-RTSP) cho 6.29 / 3.58, với LightGBM 0.55 → 0.75 (tăng theo tầm) và GRU-RT 0.35 → 0.25; khi đó **GRU-RTP và T-GCN-RTSP — dù tốt hơn GRU-RT khi đứng một mình — nhận trọng số 0**, vì chúng dùng cùng thông tin hồ sơ như LightGBM nên sai số trùng nhau. Ensemble cần thành viên *đa dạng*, không cần thành viên mạnh nhất; vì vậy ensemble chia đều LightGBM + GRU-RTP (6.45) kém hơn trộn có trọng số.
+
+So với bài báo (cách tính gộp của tác giả): mô hình trộn đạt "15 phút" RMSE 4.74 / MAE 2.75 / Accuracy 0.919 / R² 0.883 và "60 phút" 6.19 / 3.49 / 0.895 / 0.800 — so với T-GCN trong bài báo 5.13 / 3.18 / 0.913 / 0.863 và 7.27 / 4.60 / 0.876 / 0.728 (giảm 8% và 15% RMSE, 13% và 24% MAE), dù giao thức chặt hơn.
 
 ### 11.7 SZ-taxi
 
@@ -848,7 +856,7 @@ Trên SZ-taxi, bức tranh **đảo ngược** so với Los-loop — và chính 
 
 ### 11.8 Mô hình cuối cùng mới và cách đọc lên để dự báo
 
-Theo validation, **LightGBM (v2, 127 lá) là mô hình đơn tốt nhất** và **trộn theo tầm LightGBM + GRU-RT là dự báo cuối cùng** cho Los-loop. Mô hình LightGBM là một thư mục:
+Theo validation, **LightGBM (v2, 127 lá) là mô hình đơn tốt nhất**, **Graph WaveNet + residual là mạng nơ-ron tốt nhất**, và **trộn theo tầm hai mô hình này (+ GRU-RT với trọng số nhỏ) là dự báo cuối cùng** cho Los-loop. Các tệp trong `models/`: `losloop_lgbm/` (LightGBM), `losloop_gwnet_res.pt` (Graph WaveNet, seed tốt nhất theo validation), `losloop_gru_res_time_seed*.pt` (GRU-RT); SZ-taxi: `sztaxi_lgbm/`, `sztaxi_stid.pt`. Mô hình LightGBM là một thư mục:
 
 | Tệp | Nội dung |
 |---|---|
@@ -884,7 +892,7 @@ target_time
 
 So với ví dụ cùng thời điểm ở mục 6.2: với cảm biến đang kẹt 767542 (thực tế 18–23 mph), ensemble GRU-RT dự báo "hồi phục" dần lên 38.5 mph sau 1 giờ, còn **LightGBM giữ ở 22–27 mph** — mô hình biết cảm biến này đang ở trong khung giờ thường kẹt (đặc trưng `dev_from_prof`, `prof_change_k`), nên không kéo dự báo về mức thông thoáng. Đây là minh chứng cụ thể cho việc giảm MAE khi kẹt xe ở mục 11.5.
 
-Ensemble/trộn theo tầm không cần mã riêng để dùng: lấy dự báo LightGBM và GRU-RT (`predict.py --checkpoint models/losloop_gru_res_time_seed*.pt`) rồi cộng có trọng số theo bảng mục 11.6.
+Graph WaveNet được nạp đúng như GRU/T-GCN (`predict.py --checkpoint models/losloop_gwnet_res.pt ...`, checkpoint chứa kiến trúc, trọng số, ma trận chuyển P_f, P_b và thống kê chuẩn hóa). Trộn theo tầm không cần mã riêng: lấy dự báo của LightGBM, Graph WaveNet và GRU-RT rồi cộng có trọng số theo bảng ở mục 11.6 (trọng số lưu trong `results/losloop/ensemble/blend/metrics.json`).
 
 
 ## 12. Hạn chế và hướng phát triển
@@ -897,7 +905,7 @@ Ensemble/trộn theo tầm không cần mã riêng để dùng: lấy dự báo 
 
 **Hướng phát triển (theo thứ tự lợi ích kỳ vọng / chi phí)**
 
-1. **Đưa vào sử dụng ngay:** trộn LightGBM + GRU-RT theo tầm (mục 11), kèm bước kiểm tra/điền giá trị thiếu ở đầu vào và cắt dự báo về [0, v_max].
+1. **Đưa vào sử dụng ngay:** trộn LightGBM + Graph WaveNet-residual theo tầm (mục 11), kèm bước kiểm tra/điền giá trị thiếu ở đầu vào và cắt dự báo về [0, v_max].
 2. **Chạy các kiến trúc hiện đại trên dữ liệu đủ lớn** (METR-LA, PEMS-BAY — `LOCAL_RUN.md`): Graph WaveNet, STAEformer cỡ đầy đủ trên GPU, để kiểm chứng xem lợi thế của chúng có xuất hiện khi không bị giới hạn bởi 5 ngày dữ liệu.
 3. **Đưa hồ sơ theo giờ vào mạng nơ-ron một cách có điều chuẩn**: hiện GRU-RTP/T-GCN-RTSP quá khớp sau 6–11 epoch; nên thử dropout/weight decay mạnh hơn, hoặc dừng sớm riêng cho từng tầm như LightGBM.
 4. **Dự báo phân vị / conformal theo giờ** để khoảng dự báo đạt độ phủ đúng cả trong giờ cao điểm.
@@ -910,7 +918,7 @@ Chúng tôi đã cài đặt lại và chạy GRU, GCN, T-GCN cùng 4 baseline c
 
 Cải tiến hiệu quả nhất trên Los-loop không nằm ở đồ thị mà ở **cách đặt bài toán**: học phần thay đổi so với giá trị cuối (residual) và cho mô hình biết giờ trong ngày; ensemble 3 seed của GRU-RT giảm RMSE 7.8% so với GRU và 8.0% so với T-GCN (có ý nghĩa thống kê), vượt mọi con số trong bài báo dù dùng giao thức chặt hơn. Nhưng cải tiến phụ thuộc dữ liệu: trên SZ-taxi (nhiễu, nhiều giá trị thiếu) residual không giúp, và mọi mô hình chỉ hơn trung bình trượt vài phần trăm. Đồ thị có giá trị thật — ở tầm xa, khi tốc độ biến động mạnh, khi dữ liệu nhiễu — nhưng chỉ khi được thiết kế để không xóa mờ thông tin riêng của từng nút.
 
-Phần cải tiến nâng cao (mục 11) củng cố kết luận đó theo hướng khai phá dữ liệu: **thông tin đúng quan trọng hơn kiến trúc phức tạp**. Một mô hình LightGBM với đặc trưng thiết kế từ hiểu biết về giao thông — đặc biệt là hồ sơ tốc độ theo khung giờ của từng cảm biến — vượt mọi mạng nơ-ron (kể cả các kiến trúc 2019–2023) trên dữ liệu nhỏ này, khắc phục điểm yếu giờ cao điểm, và khi trộn theo tầm với GRU-RT (trọng số học trên validation) cho sai số thấp hơn 16% so với T-GCN gốc. Các kiến trúc hiện đại cần được đánh giá lại trên dữ liệu nhiều tháng trước khi kết luận.
+Phần cải tiến nâng cao (mục 11) củng cố kết luận đó theo hướng khai phá dữ liệu: **thông tin đúng quan trọng hơn kiến trúc phức tạp**. Một mô hình LightGBM với đặc trưng thiết kế từ hiểu biết về giao thông — đặc biệt là hồ sơ tốc độ theo khung giờ của từng cảm biến — là mô hình đơn tốt nhất trên dữ liệu nhỏ này và khắc phục điểm yếu giờ cao điểm. Trong các kiến trúc hiện đại, chỉ Graph WaveNet *kết hợp với residual* tiến sát nó; trộn hai họ mô hình này theo tầm (trọng số học trên validation) cho sai số thấp hơn 18% (RMSE) và 20% (MAE) so với T-GCN gốc. Trên SZ-taxi nhiều dữ liệu hơn, STID — mô hình tự học "hồ sơ" qua embedding — lại dẫn đầu: cùng một tri thức, được học tự động khi đủ dữ liệu hoặc được đưa vào bằng tay khi thiếu dữ liệu.
 
 ## Phụ lục A. Cách chạy lại toàn bộ
 

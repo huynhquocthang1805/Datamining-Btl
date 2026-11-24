@@ -21,3 +21,11 @@
 - Residual + đặc trưng giờ/thứ: cải thiện có ý nghĩa (GRU-RT 6.98 so với GRU 7.50, p < 0.001).
 - Tách self/láng giềng: T-GCN 7.30 so với GRU 7.50 (p = 0.01).
 - Không có lợi / không ổn định: đồ thị thích nghi (T-GCN+), loss đơn vị gốc (7.14 ± 0.24), cửa sổ 24 bước, hidden 100. Huber đổi RMSE lấy MAE.
+
+## Cải tiến nâng cao (đợt 2)
+- `tgcn/models_modern.py`: STID, Graph WaveNet (cài đặt kênh-cuối, nhanh trên CPU), DCRNN-lite (diffusion hai chiều K = 2, đầu ra trực tiếp), STAEformer; cấu hình `compact` (CPU) và `full` (kích thước bài báo, GPU); tùy chọn residual.
+- `gbdt.py`: LightGBM với ~50 đặc trưng không gian–thời gian (độ trễ, thống kê trượt, láng giềng qua Â, lịch, hồ sơ theo giờ của từng cảm biến; v2: bất thường láng giềng/toàn mạng), một mô hình cho mỗi tầm, dừng sớm trên validation; lưu/nạp mô hình (`predict.py` nhận thư mục).
+- `--profile` cho GRU/T-GCN: hồ sơ theo giờ (chỉ từ train) làm đầu vào và thay đổi hồ sơ dự kiến tới t+k ở đầu ra.
+- `analysis/blend.py`: trộn theo từng tầm, trọng số không âm tối ưu trên validation.
+- `tools/prepare_large_dataset.py`, `LOCAL_RUN.md`: chạy trên GPU và METR-LA / PEMS-BAY.
+- Kết quả (3 seed): trộn LightGBM + Graph WaveNet-res 6.19 / 3.49 trên Los-loop (−18% / −20% so với T-GCN); STID tốt nhất trên SZ-taxi.

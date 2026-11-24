@@ -17,16 +17,19 @@ Cài đặt PyTorch độc lập của GRU, GCN, T-GCN (Zhao et al., 2019) và c
 | T-GCN (Â đúng như mã tác giả) | 7.52 ± 0.03 | 4.37 ± 0.04 | **không hơn GRU** (p = 0.76) |
 | T-GCN tách self/láng giềng `[x, Âx]W` | 7.30 ± 0.06 | 4.12 ± 0.02 | hơn GRU có ý nghĩa (p = 0.01) |
 | STID / DCRNN-lite (kiến trúc 2018–2022) | 7.43 / 7.56 | 4.16 / 4.39 | quá khớp trên 5 ngày dữ liệu |
+| Graph WaveNet + residual (2019) | 6.59 ± 0.12 | 3.67 ± 0.04 | mạng nơ-ron tốt nhất |
 | GRU-RT (residual + giờ/thứ), ensemble 3 seed | 6.91 | 4.01 | mô hình tốt nhất phần 1 |
 | T-GCN-RTSP (+ hồ sơ theo giờ của cảm biến) | 6.69 ± 0.03 | 4.10 ± 0.09 | mạng nơ-ron tốt nhất |
 | **LightGBM + đặc trưng không gian–thời gian** | **6.47 ± 0.00** | **3.60** | mô hình đơn tốt nhất |
-| **Trộn LightGBM + GRU-RT theo tầm (trọng số fit trên validation)** | **6.29** | **3.58** | **tốt nhất: −16% so với T-GCN gốc** |
+| **Trộn LightGBM + Graph WaveNet-res theo tầm (trọng số fit trên validation)** | **6.19** | **3.49** | **tốt nhất: −18% RMSE, −20% MAE so với T-GCN gốc** |
+
+SZ-taxi (mục tiêu ≠ 0): GRU 4.62 / 3.27, T-GCN 4.69 / 3.35, LightGBM 4.49 / 3.17, **STID 4.45 / 3.14**, **trộn STID + LightGBM 4.40 / 3.11**.
 
 Phát hiện chính:
 - Phép chuẩn hóa ma trận kề của T-GCN chỉ giữ ~30% tín hiệu của chính nút ⇒ dự báo tầm ngắn kém cả persistence.
 - Bài báo chọn epoch theo tập test, gộp sai số các tầm, thiếu baseline persistence, và MAE của GRU tốt hơn T-GCN ở cả 8 ô của Bảng 1.
 - Đặc trưng quan trọng nhất là **hồ sơ tốc độ theo khung giờ của từng cảm biến** (50–65% tầm quan trọng trong LightGBM). Nhờ nó, lần đầu có mô hình thắng persistence trong giờ cao điểm.
-- Kiến trúc hiện đại cần dữ liệu lớn hơn để phát huy — xem [`LOCAL_RUN.md`](LOCAL_RUN.md) để chạy trên GPU và METR-LA / PEMS-BAY.
+- Kiến trúc hiện đại phụ thuộc dữ liệu: trên Los-loop (5 ngày) chỉ Graph WaveNet + residual phát huy, trên SZ-taxi (22 ngày) STID dẫn đầu — xem [`LOCAL_RUN.md`](LOCAL_RUN.md) để chạy cấu hình đầy đủ trên GPU và METR-LA / PEMS-BAY.
 
 ## 1. Cài đặt
 
@@ -86,7 +89,7 @@ Tùy chọn của `train.py`: `--model {gru,gcn,tgcn,tgcn_plus}`, `--residual`, 
 ```bash
 python run_suite.py --spec losloop:modern --jobs 4          # STID, DCRNN-lite, GRU-RTP, T-GCN-RTSP, Graph WaveNet (gọn)
 python gbdt.py --dataset losloop --features 2 --num-leaves 127 --tag lgbm_best --seeds 42 123 2026
-python analysis/blend.py --dataset losloop --members lgbm_best tgcn_rtsp gru_rtp gru_res_time
+python analysis/blend.py --dataset losloop --members lgbm_best gwnet_res gru_res_time tgcn_rtsp
 python analysis/modern_models.py --dataset losloop
 ```
 
