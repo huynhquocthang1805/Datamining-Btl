@@ -49,9 +49,13 @@ def add_table(doc, rows):
         for r in c.paragraphs[0].runs: r.bold = True
         shade(c, 'E8EEF7')
     for i, row in enumerate(body, 1):
+        is_base = bool(row) and '*baseline*' in row[0]          # the reference row of a comparison table
         for j in range(len(header)):
             c = t.cell(i, j); c.text = ''
-            add_runs(c.paragraphs[0], row[j] if j < len(row) else '', Pt(8.5))
+            txt = row[j] if j < len(row) else ''
+            add_runs(c.paragraphs[0], txt, Pt(8.5))
+            if is_base or '*(baseline)*' in txt:
+                shade(c, 'FFF3D1')
     doc.add_paragraph()
 
 

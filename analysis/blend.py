@@ -23,10 +23,14 @@ import matplotlib.pyplot as plt
 NAMES = {'lgbm': 'LightGBM', 'lgbm_v2': 'LightGBM v2', 'lgbm_best': 'LightGBM', 'gru_rtp': 'GRU-RTP', 'gru_res_time': 'GRU-RT',
          'tgcn_rtsp': 'T-GCN-RTSP', 'tgcn_selfsep_res_time': 'T-GCN-RTS', 'stid_res': 'STID + res',
          'tgcn_selfsep': 'T-GCN tách self', 'dcrnn': 'DCRNN-lite', 'gwnet': 'Graph WaveNet',
-         'gwnet_res': 'Graph WaveNet + res', 'gru': 'GRU', 'stid': 'STID'}
+         'gwnet_res': 'Graph WaveNet + res', 'gru': 'GRU', 'stid': 'STID',
+         'gpu_gwnet': 'Graph WaveNet (GPU)', 'gpu_gwnet_res': 'Graph WaveNet + res (GPU)',
+         'gpu_staeformer': 'STAEformer (GPU)', 'gpu_staeformer_full': 'STAEformer đầy đủ (GPU)'}
 
 
 def member_runs(ds, name):
+    if name.startswith('gpu_'):    # GPU runs copied into results/<ds>/modern_gpu/<name>/seed_*/
+        return [r for r in run_dirs(ds) if r['name'] == name[4:] and r['group'] == 'modern_gpu']
     return [r for r in run_dirs(ds) if r['name'] == name and r['group'] in ('main', 'improve', 'variants', 'modern')]
 
 

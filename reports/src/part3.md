@@ -8,19 +8,12 @@ GRU (hidden 64, L = 12) hội tụ ổn định (dừng sớm ở epoch 87–101
 
 ### 5.2 Giai đoạn 2 — T-GCN trên cùng dữ liệu, cùng cách chia
 
-| Mô hình (3 seed) | RMSE TB 12 tầm | MAE TB 12 tầm | 5 phút | 15 phút | 30 phút | 60 phút |
-|---|---|---|---|---|---|---|
-| Naive (persistence) | 8.418 | 4.408 | 4.45 / 2.69 | 6.45 / 3.56 | 8.22 / 4.37 | 10.85 / 5.77 |
-| GCN | 8.606 ± 0.009 | 5.345 ± 0.009 | 7.42 / 4.61 | 7.85 / 4.89 | 8.48 / 5.30 | 9.69 / 6.04 |
-| GRU | 7.495 ± 0.006 | **4.175 ± 0.023** | **4.23 / 2.53** | **6.00 / 3.36** | 7.44 / 4.18 | 9.32 / 5.38 |
-| T-GCN | 7.516 ± 0.031 | 4.371 ± 0.037 | 4.84 / 3.03 | 6.16 / 3.67 | 7.47 / 4.36 | **9.13** / 5.39 |
-
-*(ô "5 phút … 60 phút" = RMSE / MAE tại đúng bước đó)*
+PHASE2_TABLE
 
 Ba quan sát:
 
 1. **T-GCN không tốt hơn GRU tổng thể.** Chênh lệch RMSE +0.02 (KTC 95% bootstrap khối [−0.12; +0.15], kiểm định Diebold–Mariano p = 0.76) — không có ý nghĩa thống kê; MAE thì GRU tốt hơn rõ (4.18 so với 4.37). Điều này **trùng khớp với Bảng 1 của chính bài báo**, nơi MAE của GRU thấp hơn T-GCN ở cả 8 ô (mục 4, P5).
-2. **Có điểm giao nhau theo tầm dự báo:** ở tầm ngắn T-GCN kém GRU rõ (5 phút: 4.84 so với 4.23 — kém cả persistence 4.45), nhưng ở 45–60 phút T-GCN tốt hơn (60 phút: 9.13 so với 9.32). Thông tin láng giềng có ích để dự báo xa (ùn tắc lan truyền) nhưng làm hại dự báo gần — mục 7.3 giải thích cơ chế.
+2. **Có điểm giao nhau theo tầm dự báo:** ở tầm ngắn T-GCN kém GRU rõ (5 phút: 4.86 so với 4.24 — kém cả persistence 4.45; trong bảng, persistence được in đậm ở 5 phút vì tốt hơn T-GCN), nhưng ở 45–60 phút T-GCN tốt hơn (60 phút: 9.13 so với 9.32). Thông tin láng giềng có ích để dự báo xa (ùn tắc lan truyền) nhưng làm hại dự báo gần — mục 7.3 giải thích cơ chế.
 3. **Cách chuẩn hóa đồ thị quyết định T-GCN tốt hay tệ.** Phiên bản đầu của dự án đặt đường chéo Â = 1 (không cộng thêm I như mã tác giả) cho T-GCN RMSE 7.93 / MAE 4.74 (5 phút: 5.96!). Chỉ riêng việc tăng trọng số tự thân (self-loop = 2, đúng như mã gốc) đã đưa T-GCN về 7.52 / 4.37. Đây là bằng chứng trực tiếp đầu tiên cho giả thuyết "loãng tín hiệu của chính nút".
 
 ![Hình 7. Sai số theo từng tầm dự báo (dải mờ: min–max qua 3 seed)](figures/cmp_horizon_losloop.png)
@@ -67,7 +60,7 @@ ABLATION_TABLE
 
 Đọc bảng ablation theo cặp có kiểm soát:
 
-- **Residual sửa tầm ngắn, đặc trưng thời gian sửa tầm dài.** T-GCN + residual: 5 phút 4.84 → 4.33 nhưng 60 phút gần như không đổi; T-GCN + thời gian: 60 phút 9.07 → 8.53 nhưng 5 phút xấu đi. Kết hợp (T-GCN-RT) lấy được cả hai.
+- **Residual sửa tầm ngắn, đặc trưng thời gian sửa tầm dài.** T-GCN + residual (seed 42): 5 phút 4.84 → 4.33 nhưng 60 phút gần như không đổi; T-GCN + thời gian: 60 phút 9.07 → 8.53 nhưng 5 phút xấu đi. Kết hợp (T-GCN-RT) lấy được cả hai.
 - **Cùng ô T-GCN-RT nhưng bỏ đồ thị (Â = I) lại tốt hơn có đồ thị** (7.09 so với 7.35). Với cách chuẩn hóa của tác giả, đồ thị vật lý gây hại khi mô hình đã có residual + thời gian.
 - **Tách self/láng giềng ([x, Âx]W) là cách duy nhất làm đồ thị có lợi:** T-GCN tách self (không RT) đạt **7.30 ± 0.06 / 4.12 ± 0.02 qua 3 seed — tốt hơn GRU có ý nghĩa thống kê** (ΔRMSE −0.20, KTC 95% [−0.34; −0.07], DM p = 0.010) và tốt hơn T-GCN gốc (p < 0.001); T-GCN-RT tách self đạt 7.17 / 4.13 so với 7.35 / 4.32 của T-GCN-RT.
 - **Loss theo đơn vị gốc** (nhân trọng số std² cho mỗi cảm biến, để cảm biến hay kẹt được coi trọng như khi chấm điểm) cải thiện GRU-RT ở seed 42 (6.94 / 4.03 so với 7.05 / 4.08) — nhưng **không lặp lại qua 3 seed** (7.14 ± 0.24 so với 6.98 ± 0.06) và không giúp T-GCN-RT. Đây là ví dụ cụ thể vì sao không được kết luận từ một lần chạy (đúng lỗi P7 của bài báo).

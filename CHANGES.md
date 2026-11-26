@@ -29,3 +29,10 @@
 - `analysis/blend.py`: trộn theo từng tầm, trọng số không âm tối ưu trên validation.
 - `tools/prepare_large_dataset.py`, `LOCAL_RUN.md`: chạy trên GPU và METR-LA / PEMS-BAY.
 - Kết quả (3 seed): trộn LightGBM + Graph WaveNet-res 6.19 / 3.49 trên Los-loop (−18% / −20% so với T-GCN); STID tốt nhất trên SZ-taxi.
+
+## Kết quả chạy GPU và bảng so với baseline gốc
+- Kết quả 42 run GPU của người dùng (Graph WaveNet, STAEformer; cỡ gọn/đầy đủ; có/không residual; 3 seed; Los-loop và SZ-taxi) được giữ nguyên trong `reports/external/` và gộp vào `all_runs_*.csv`, bảng mô hình hiện đại và bảng tổng hợp.
+- `analysis/gpu_results.py`: kiểm tra số liệu GPU (tóm tắt của người dùng khớp tuyệt đối với 21 run; sai số tăng theo tầm; CPU ↔ GPU), đếm tham số, suy ra chính xác chỉ số kiểu bài báo (RMSE/MAE/Accuracy/R² gộp 1..k) từ sai số từng bước.
+- `analysis/baseline_compare.py`: mọi mô hình so với baseline gốc — T-GCN trong Bảng 1 của bài báo (cách tính của bài báo) và T-GCN gốc tái lập (giao thức nghiêm ngặt).
+- `tools/build_report.py`: mọi bảng so sánh có dòng *baseline* (tô nền trong bản Word) và **in đậm mọi số tốt hơn baseline** ở cùng cột, so ở đúng số chữ số hiển thị (`tests/test_report_bold.py`).
+- Sửa: bảng 5.2 trước đây lấy cột "5 phút" từ seed 42 trong khi các cột khác là trung bình 3 seed — nay mọi cột là trung bình 3 seed (T-GCN 5 phút: 4.86, không phải 4.84); SZ-taxi chỉ có 1 seed GRU-RT nên "ensemble GRU-RT" không còn được liệt kê như một mô hình riêng và kiểm định ghi đúng "GRU-RT (1 seed)"; STID trên SZ-taxi làm tròn 2 chữ số là 4.44 (không phải 4.45).

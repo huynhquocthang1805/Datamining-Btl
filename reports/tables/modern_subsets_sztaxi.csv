@@ -9,6 +9,16 @@ naive,60 phút,cao điểm,4.407035827636719
 naive,60 phút,ngoài cao điểm,4.355688571929932
 naive,60 phút,kẹt xe (v<10),3.752091646194458
 naive,60 phút,biến động mạnh (Δ>10),14.4617919921875
+tgcn,15 phút,tất cả,3.2828891277313232
+tgcn,15 phút,cao điểm,3.265322685241699
+tgcn,15 phút,ngoài cao điểm,3.2863147258758545
+tgcn,15 phút,kẹt xe (v<10),2.863710641860962
+tgcn,15 phút,biến động mạnh (Δ>10),8.492122650146484
+tgcn,60 phút,tất cả,3.396108388900757
+tgcn,60 phút,cao điểm,3.418062210083008
+tgcn,60 phút,ngoài cao điểm,3.3918261528015137
+tgcn,60 phút,kẹt xe (v<10),2.9728639125823975
+tgcn,60 phút,biến động mạnh (Δ>10),8.375387191772461
 gru_res_time,15 phút,tất cả,3.1914334297180176
 gru_res_time,15 phút,cao điểm,3.1752586364746094
 gru_res_time,15 phút,ngoài cao điểm,3.194587469100952

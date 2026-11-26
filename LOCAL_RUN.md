@@ -77,4 +77,15 @@ python analysis/reliability.py --dataset losloop --skip-model-runs
 python tools/build_report.py && python tools/md2docx.py reports/BAO_CAO_TGCN.md reports/BAO_CAO_TGCN.docx
 ```
 
-Gửi lại cho tôi (hoặc commit) các thư mục `results/<dataset>/modern_gpu/` nếu muốn tôi viết phần phân tích kết quả GPU vào báo cáo.
+**Lưu ý:** `results/` không nằm trong git. Trên một máy chỉ có các run GPU, các script phân tích ở trên sẽ thiếu các run CPU; `compare_models.py` gộp thêm `reports/external/*.csv`, còn `modern_models.py`, `baseline_compare.py` và `gpu_results.py` sẽ dừng (hoặc bỏ qua phần thiếu) thay vì ghi đè bảng bằng dữ liệu không đầy đủ. Cách an toàn nhất là chỉ commit kết quả của bạn và để phần tổng hợp chạy ở nơi có đủ run.
+
+## 5. Trạng thái (đã chạy)
+
+- **Đã chạy trên GPU:** `losloop:modern_gpu` và `sztaxi:modern_gpu` — 7 cấu hình × 3 seed × 2 bộ dữ liệu = 42 run. Bảng sai số từng run nằm trong `reports/external/modern_gpu_runs_*.csv`; đã kiểm tra (khớp tuyệt đối với tệp tóm tắt, sai số tăng theo tầm ở mọi run, Graph WaveNet + residual tái lập kết quả CPU) và đưa vào báo cáo (mục 11.8 và bảng tổng hợp đầu báo cáo).
+- **Chưa có:** tệp dự báo của các run GPU, nên chưa có kiểm định Diebold–Mariano, phân tích giờ cao điểm hay trộn theo tầm với chúng. Muốn bổ sung, commit (cần `-f` vì `results/` bị bỏ qua) ít nhất cấu hình tốt nhất của mỗi bộ dữ liệu:
+  ```bash
+  git add -f results/losloop/modern_gpu/gwnet_res/seed_*/{metrics.json,history.csv,config.json,test_predictions.npz,best.pt}
+  git add -f results/sztaxi/modern_gpu/gwnet/seed_*/{metrics.json,history.csv,config.json,test_predictions.npz,best.pt}
+  ```
+  `analysis/modern_models.py` sẽ đưa chúng vào bảng và kiểm định dưới tên `gpu_<cấu hình>`, và `analysis/blend.py --members lgbm_best gpu_gwnet_res gru_res_time` đưa chúng vào bản trộn.
+- **Chưa chạy:** METR-LA / PEMS-BAY (mục 3).

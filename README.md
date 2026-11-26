@@ -8,28 +8,31 @@ Cài đặt PyTorch độc lập của GRU, GCN, T-GCN (Zhao et al., 2019) và c
 
 📄 **Báo cáo đầy đủ:** [`reports/BAO_CAO_TGCN.md`](reports/BAO_CAO_TGCN.md) (bản Word: `reports/BAO_CAO_TGCN.docx`) — ý tưởng → dẫn dắt → phản biện → minh chứng; ảnh hưởng của thuộc tính; mô hình huấn luyện được và cách nạp để dự báo; độ tin cậy; giải thích cơ chế; so sánh với bài báo.
 
-## Kết quả chính (Los-loop, test 20% cuối, 3 seed, RMSE / MAE trung bình 12 tầm 5…60 phút)
+## Kết quả chính so với baseline gốc T-GCN (Los-loop, test 20% cuối, 3 seed, RMSE / MAE trung bình 12 tầm 5…60 phút)
 
-| Mô hình | RMSE | MAE | Ghi chú |
-|---|---|---|---|
-| Persistence (giữ giá trị cuối) | 8.42 | 4.41 | baseline bài báo không có |
-| GRU | 7.50 ± 0.01 | 4.18 ± 0.02 | tái lập đúng bài báo ("15 phút": 5.217 so với 5.218) |
-| T-GCN (Â đúng như mã tác giả) | 7.52 ± 0.03 | 4.37 ± 0.04 | **không hơn GRU** (p = 0.76) |
-| T-GCN tách self/láng giềng `[x, Âx]W` | 7.30 ± 0.06 | 4.12 ± 0.02 | hơn GRU có ý nghĩa (p = 0.01) |
-| STID / DCRNN-lite (kiến trúc 2018–2022) | 7.43 / 7.56 | 4.16 / 4.39 | quá khớp trên 5 ngày dữ liệu |
-| Graph WaveNet + residual (2019) | 6.59 ± 0.12 | 3.67 ± 0.04 | mạng nơ-ron tốt nhất |
-| GRU-RT (residual + giờ/thứ), ensemble 3 seed | 6.91 | 4.01 | mô hình tốt nhất phần 1 |
-| T-GCN-RTSP (+ hồ sơ theo giờ của cảm biến) | 6.69 ± 0.03 | 4.10 ± 0.09 | mạng nơ-ron tốt nhất |
-| **LightGBM + đặc trưng không gian–thời gian** | **6.47 ± 0.00** | **3.60** | mô hình đơn tốt nhất |
-| **Trộn LightGBM + Graph WaveNet-res theo tầm (trọng số fit trên validation)** | **6.19** | **3.49** | **tốt nhất: −18% RMSE, −20% MAE so với T-GCN gốc** |
+**Số in đậm = tốt hơn T-GCN gốc** (dòng *baseline*, tái lập cùng giao thức). Bảng đầy đủ — cả so với con số T-GCN trong Bảng 1 của bài báo, cả SZ-taxi — ở đầu báo cáo (mục "Bảng tổng hợp").
 
-SZ-taxi (mục tiêu ≠ 0): GRU 4.62 / 3.27, T-GCN 4.69 / 3.35, LightGBM 4.49 / 3.17, **STID 4.45 / 3.14**, **trộn STID + LightGBM 4.40 / 3.11**.
+| Mô hình | RMSE | MAE | Δ RMSE / MAE so với T-GCN gốc | Ghi chú |
+|---|---|---|---|---|
+| Persistence (giữ giá trị cuối) | 8.42 | 4.41 | +12.0% / +0.9% | baseline bài báo không có |
+| GRU | **7.50** ± 0.01 | **4.18** ± 0.02 | −0.3% / −4.5% | tái lập đúng bài báo ("15 phút": 5.217 so với 5.218) |
+| T-GCN gốc (Â đúng như mã tác giả) — *baseline* | 7.52 ± 0.03 | 4.37 ± 0.04 | — | không hơn GRU (p = 0.76) |
+| T-GCN tách self/láng giềng `[x, Âx]W` | **7.30** ± 0.06 | **4.12** ± 0.02 | −2.9% / −5.7% | hơn GRU có ý nghĩa (p = 0.01) |
+| STID / DCRNN-lite (kiến trúc 2018–2022) | **7.43** / 7.56 | **4.16** / 4.39 | −1.2% / +0.6% (RMSE) | quá khớp trên 5 ngày dữ liệu |
+| STAEformer cỡ đầy đủ, 1.26 triệu tham số (GPU) | **7.22** ± 0.43 | **4.05** ± 0.17 | −3.9% / −7.3% | quá khớp, rất không ổn định giữa các seed |
+| GRU-RT (residual + giờ/thứ), ensemble 3 seed | **6.91** | **4.01** | −8.1% / −8.2% | mô hình tốt nhất phần 1 |
+| T-GCN-RTSP (+ hồ sơ theo giờ của cảm biến) | **6.69** ± 0.03 | **4.10** ± 0.09 | −11.1% / −6.2% | tốt nhất trong họ T-GCN |
+| Graph WaveNet + residual (2019) — CPU / GPU | **6.59** ± 0.12 / **6.57** ± 0.05 | **3.67** / **3.74** | −12.3% / −15.9% (CPU) | mạng nơ-ron tốt nhất; GPU tái lập CPU |
+| LightGBM + đặc trưng không gian–thời gian | **6.47** ± <0.01 | **3.60** | −14.0% / −17.7% | mô hình đơn tốt nhất |
+| Trộn LightGBM + Graph WaveNet-res theo tầm (trọng số fit trên validation) | **6.19** | **3.49** | **−17.6% / −20.1%** | **tốt nhất**; vượt T-GCN của bài báo ở 16/16 ô Bảng 1 |
+
+SZ-taxi (mục tiêu ≠ 0; T-GCN gốc 4.69 / 3.35 là baseline): GRU **4.62** / **3.27**, LightGBM **4.49** / **3.17**, STID **4.44** / **3.14**, Graph WaveNet (GPU) **4.43** / **3.13**, trộn STID + LightGBM **4.40** / **3.11** (−6.2% / −7.2%).
 
 Phát hiện chính:
 - Phép chuẩn hóa ma trận kề của T-GCN chỉ giữ ~30% tín hiệu của chính nút ⇒ dự báo tầm ngắn kém cả persistence.
 - Bài báo chọn epoch theo tập test, gộp sai số các tầm, thiếu baseline persistence, và MAE của GRU tốt hơn T-GCN ở cả 8 ô của Bảng 1.
 - Đặc trưng quan trọng nhất là **hồ sơ tốc độ theo khung giờ của từng cảm biến** (50–65% tầm quan trọng trong LightGBM). Nhờ nó, lần đầu có mô hình thắng persistence trong giờ cao điểm.
-- Kiến trúc hiện đại phụ thuộc dữ liệu: trên Los-loop (5 ngày) chỉ Graph WaveNet + residual phát huy, trên SZ-taxi (22 ngày) STID dẫn đầu — xem [`LOCAL_RUN.md`](LOCAL_RUN.md) để chạy cấu hình đầy đủ trên GPU và METR-LA / PEMS-BAY.
+- Kiến trúc hiện đại phụ thuộc dữ liệu: trên Los-loop (5 ngày) chỉ Graph WaveNet + residual phát huy, trên SZ-taxi (22 ngày) STID và Graph WaveNet dẫn đầu. Chạy cỡ đầy đủ trên GPU (42 run, mục 11.8 của báo cáo) không cải thiện: giới hạn là dữ liệu, không phải sức tính — bước tiếp theo là METR-LA / PEMS-BAY ([`LOCAL_RUN.md`](LOCAL_RUN.md)).
 
 ## 1. Cài đặt
 
@@ -93,7 +96,12 @@ python analysis/blend.py --dataset losloop --members lgbm_best gwnet_res gru_res
 python analysis/modern_models.py --dataset losloop
 ```
 
-Các cấu hình nặng (STAEformer, Graph WaveNet cỡ đầy đủ, METR-LA/PEMS-BAY): xem [`LOCAL_RUN.md`](LOCAL_RUN.md).
+Các cấu hình nặng (STAEformer, Graph WaveNet cỡ đầy đủ, METR-LA/PEMS-BAY): xem [`LOCAL_RUN.md`](LOCAL_RUN.md). Kết quả GPU đã chạy được lưu trong `reports/external/`; kiểm tra và tổng hợp:
+
+```bash
+python analysis/gpu_results.py        # kiểm tra số liệu GPU, suy ra chỉ số kiểu bài báo
+python analysis/baseline_compare.py   # bảng mọi mô hình so với baseline gốc T-GCN (in đậm số tốt hơn)
+```
 
 ## 5. Phân tích và báo cáo
 

@@ -37,6 +37,8 @@ KEEP = ['naive', 'linear', 'gru', 'tgcn', 'gru_res_time', 'tgcn_res_time', 'tgcn
 
 
 def lab(n):
+    if n.startswith('gpu_'):
+        return GPU_LABEL.get(n[4:], n[4:]) + ' (GPU)'
     if n.startswith('ens_'):
         n = n[4:]
     if n.startswith('lgbm_plus_'):
@@ -47,13 +49,18 @@ def lab(n):
 
 
 ENS_ONLY = set()
+GPU_LABEL = {'gwnet': 'Graph WaveNet', 'gwnet_res': 'Graph WaveNet + residual', 'gwnet_full': 'Graph WaveNet cỡ đầy đủ',
+             'gwnet_full_res': 'Graph WaveNet cỡ đầy đủ + residual', 'staeformer': 'STAEformer',
+             'staeformer_full': 'STAEformer cỡ đầy đủ', 'staeformer_full_res': 'STAEformer cỡ đầy đủ + residual'}
 
 
 def collect(ds):
+    """Runs by model name; runs made on the GPU (group modern_gpu, if their folders were copied
+    into results/) are kept apart under 'gpu_<name>'."""
     by = defaultdict(list)
     for r in run_dirs(ds):
         if r['group'] in GROUPS and r['name'] in KEEP:
-            by[r['name']].append(r)
+            by[('gpu_' if r['group'] == 'modern_gpu' else '') + r['name']].append(r)
     return by
 
 
@@ -99,10 +106,13 @@ def main():
     b = bundle_for(ds)
     iv = b.interval_min
     by = collect(ds)
+    if 'tgcn' not in by or 'gru' not in by:
+        raise SystemExit(f'results/{ds}/main/(gru|tgcn) not found: this script needs the full set of runs '
+                         '(results/ is not in git). Tables left unchanged.')
     view = (lambda m: m.get('masked_nonzero', m)) if mask_zero else (lambda m: m)
     # ---- main table
     rows = []
-    for name in KEEP:
+    for name in KEEP + [f'gpu_{c}' for c in GPU_LABEL]:
         rs = by.get(name)
         if not rs: continue
         ms = [view(r['metrics']) for r in rs]
@@ -112,7 +122,8 @@ def main():
         ks = list(ms[0]['per_horizon'])
         k15, k60 = (ks[2], ks[11]) if len(ks) >= 12 else (ks[0], ks[-1])
         summ = rs[0]['summary']
-        rows.append({'name': name, 'Mô hình': lab(name), 'nhóm': FAMILY.get(name, 'hiện đại'), 'seed': len(rs),
+        rows.append({'name': name, 'Mô hình': lab(name), 'seed': len(rs),
+                     'nhóm': 'hiện đại (GPU)' if name.startswith('gpu_') else FAMILY.get(name, 'hiện đại'),
                      'tham số': summ.get('n_parameters'),
                      'RMSE val': np.nanmean(vr), 'RMSE': f('RMSE').mean(), 'RMSE_sd': f('RMSE').std(ddof=1) if len(rs) > 1 else np.nan,
                      'MAE': f('MAE').mean(), 'MAE_sd': f('MAE').std(ddof=1) if len(rs) > 1 else np.nan,
@@ -136,6 +147,8 @@ def main():
         ens['gru_rtp'] = mean_pred(by['gru_rtp'])
     for name, (yt, yp, t) in ens.items():
         sc = save_ensemble(ds, name, yt, yp, t, [], iv)
+        if name in by and len(by[name]) < 2:      # a one-run "ensemble" is that run: no extra row
+            continue
         m = view(sc); ks = list(m['per_horizon'])
         k15, k60 = (ks[2], ks[11]) if len(ks) >= 12 else (ks[0], ks[-1])
         label = (f'Ensemble LightGBM + {LABEL.get(name[10:], name[10:])}' if name.startswith('lgbm_plus_')
@@ -156,6 +169,21 @@ def main():
                      'RMSE': m['overall']['RMSE'], 'RMSE_sd': np.nan, 'MAE': m['overall']['MAE'], 'MAE_sd': np.nan,
                      'RMSE 15': m['per_horizon'][k15]['RMSE'], 'MAE 15': m['per_horizon'][k15]['MAE'],
                      'RMSE 60': m['per_horizon'][k60]['RMSE'], 'MAE 60': m['per_horizon'][k60]['MAE'], 'phút train/run': np.nan})
+    # ---- configurations run on the user's GPU (per-run metrics only; see analysis/gpu_results.py)
+    gs = TAB / f'modern_gpu_summary_{ds}.csv'
+    if gs.is_file():
+        for _, g in pd.read_csv(gs).iterrows():
+            if f'gpu_{g.config}' in by:          # prediction files available -> already in the table
+                continue
+            nz = mask_zero and 'RMSE ≠0' in g
+            rows.append({'name': f'gpu_{g.config}', 'Mô hình': GPU_LABEL.get(g.config, g.config) + ' (GPU)',
+                         'nhóm': 'hiện đại (GPU)', 'seed': int(g.seed), 'tham số': g['tham số'], 'RMSE val': np.nan,
+                         'RMSE': g['RMSE ≠0'] if nz else g.RMSE, 'RMSE_sd': g['RMSE ≠0_sd'] if nz else g.RMSE_sd,
+                         'MAE': g['MAE ≠0'] if nz else g.MAE, 'MAE_sd': g['MAE ≠0_sd'] if nz else g.MAE_sd,
+                         # per-step errors on targets != 0 were not exported by the GPU runs
+                         'RMSE 15': np.nan if mask_zero else g['RMSE 15'], 'MAE 15': np.nan if mask_zero else g['MAE 15'],
+                         'RMSE 60': np.nan if mask_zero else g['RMSE 60'], 'MAE 60': np.nan if mask_zero else g['MAE 60'],
+                         'phút train/run': np.nan})
     df = pd.DataFrame(rows).sort_values('RMSE')
     df.to_csv(TAB / f'modern_results_{ds}.csv', index=False)
     # LightGBM configurations (seed 42), chosen by validation
@@ -174,18 +202,18 @@ def main():
     print(df.drop(columns=['name']).round(3).to_string(index=False))
     # ---- paired tests against the previous best and against LightGBM
     block = 12 if ds == 'losloop' else 4
-    ref_name = 'ensemble GRU-RT'
+    ref_name = 'ensemble GRU-RT' if len(by.get('gru_res_time', [])) > 1 else 'GRU-RT (1 seed)'
     ref = ens.get('gru_res_time')
     tests = []
     cand = {**{k: mean_pred(v) for k, v in by.items() if k in ('lgbm', 'lgbm_best', 'gru_rtp', 'tgcn_rtsp', 'stid_res', 'stid',
-                                                                 'dcrnn', 'dcrnn_res', 'gwnet', 'gwnet_res')},
+                                                                 'dcrnn', 'dcrnn_res', 'gwnet', 'gwnet_res') or k.startswith('gpu_')},
             **{f'ens_{k}': v for k, v in ens.items() if k != 'gru_res_time'},
             **({'ens_blend': load_pred(blend[0]['dir'])} if blend else {})}
     if ref is not None:
         lb = per_sample_loss(ref[0], ref[1], mask_zero)
         for k, (yt, yp, _) in cand.items():
             d, lo, hi, pv = pair_test(per_sample_loss(yt, yp, mask_zero), lb, block)
-            a_lab = (LABEL.get(k, k) + (' (TB 3 seed)' if len(by.get(k, [])) > 1 else '')) if not k.startswith('ens_') else \
+            a_lab = (lab(k) + (' (TB 3 seed)' if len(by.get(k, [])) > 1 else '')) if not k.startswith('ens_') else \
                 ('Trộn theo tầm (fit trên val)' if k == 'ens_blend' else
                  f'Ensemble LightGBM + {LABEL.get(k[14:], k[14:])}' if k.startswith('ens_lgbm_plus_')
                  else f'Ensemble {LABEL.get(k[4:], k[4:])} (3 seed)')
@@ -195,13 +223,14 @@ def main():
         a = per_sample_loss(*mean_pred(by['gru_rtp'])[:2], mask_zero)
         bq = per_sample_loss(*mean_pred(by['gru_res_time'])[:2], mask_zero)
         d, lo, hi, pv = pair_test(a, bq, block)
-        tests.append({'A': 'GRU-RTP (3 seed)', 'B': 'GRU-RT (3 seed)', 'ΔRMSE (A−B)': d, 'CI95_low': lo, 'CI95_high': hi, 'DM_p': pv})
+        tests.append({'A': f"GRU-RTP ({len(by['gru_rtp'])} seed)", 'B': f"GRU-RT ({len(by['gru_res_time'])} seed)", 'ΔRMSE (A−B)': d, 'CI95_low': lo, 'CI95_high': hi, 'DM_p': pv})
     tdf = pd.DataFrame(tests)
     tdf.to_csv(TAB / f'modern_tests_{ds}.csv', index=False)
     print(tdf.round(4).to_string(index=False))
     # ---- error by traffic state (15 and 60 min)
     sub_rows = []
-    show = {k: v for k, v in [('naive', None), ('gru_res_time', None), ('gru_rtp', None), (LG, None)] if k in by or k == 'naive'}
+    show = {k: v for k, v in [('naive', None), ('tgcn', None), ('gru_res_time', None), ('gru_rtp', None), (LG, None)]
+            if k in by or k == 'naive'}
     preds = {}
     for k in show:
         if k == 'naive':
@@ -232,16 +261,24 @@ def main():
     y = np.arange(len(d2))
     modern = ('stid', 'stid_res', 'dcrnn', 'dcrnn_res', 'gwnet', 'gwnet_res', 'staeformer')
     colors = [ps.SERIES[6] if n.startswith('ens') else ps.SERIES[1] if n.startswith('lgbm') else
-              ps.SERIES[2] if n in ('gru_rtp', 'tgcn_rtsp') else ps.SERIES[4] if n in modern else
+              ps.SERIES[2] if n in ('gru_rtp', 'tgcn_rtsp') else ps.SERIES[4] if n in modern or n.startswith('gpu_') else
               ps.NEUTRAL if n in ('naive', 'linear') else ps.SERIES[0] for n in d2['name']]
-    ax.barh(y, d2['RMSE'], color=colors, height=.7)
+    bars = ax.barh(y, d2['RMSE'], color=colors, height=.7)
+    for bar, n in zip(bars, d2['name']):
+        if n.startswith('gpu_'):
+            bar.set_hatch('///'); bar.set_edgecolor(ps.SURFACE)
     for yi, v in zip(y, d2['RMSE']):
         ax.text(v + 0.03, yi, f'{v:.2f}', va='center', fontsize=7.5, color=ps.INK2)
-    ax.set(yticks=y, yticklabels=d2['Mô hình'], xlabel='RMSE test (TB mọi tầm)' + (' — mục tiêu ≠ 0' if mask_zero else ''),
+    ax.set(yticks=y, yticklabels=['T-GCN gốc (baseline)' if n == 'tgcn' else m for n, m in zip(d2['name'], d2['Mô hình'])],
+           xlabel='RMSE test (TB mọi tầm)' + (' — mục tiêu ≠ 0' if mask_zero else ''),
            title=f'{ds}: mọi mô hình trên cùng tập test')
+    for tick, n in zip(ax.get_yticklabels(), d2['name']):
+        if n == 'tgcn':
+            tick.set_fontweight('bold'); tick.set_color(ps.INK)
     from matplotlib.patches import Patch
     ax.legend(handles=[Patch(color=c, label=l) for c, l in ((ps.SERIES[6], 'ensemble / trộn'), (ps.SERIES[1], 'LightGBM'),
-                                                            (ps.SERIES[4], 'kiến trúc hiện đại'), (ps.SERIES[2], 'mạng + hồ sơ giờ'),
+                                                            (ps.SERIES[4], 'kiến trúc hiện đại (gạch chéo: chạy trên GPU)'),
+                                                            (ps.SERIES[2], 'mạng + hồ sơ giờ'),
                                                             (ps.SERIES[0], 'GRU / T-GCN và cải tiến phần 1'),
                                                             (ps.NEUTRAL, 'baseline'))],
               loc='upper right', fontsize=8, frameon=True, facecolor=ps.SURFACE, edgecolor=ps.GRID)
