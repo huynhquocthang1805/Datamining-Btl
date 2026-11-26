@@ -103,8 +103,7 @@ def table_main(by, interval, dataset, view):
                 v = np.array([m['per_horizon'][k][key] for m in ms], float)
                 row[f'{mn}min_{key}'] = fmt(v.mean(), v.std(ddof=1) if len(v) > 1 else None)
         rows.append(row)
-    df = pd.DataFrame(rows).set_index('model')
-    return df
+    return pd.DataFrame(rows).set_index('model') if rows else pd.DataFrame()
 
 
 def numeric_curve(by, name, view):
@@ -203,6 +202,9 @@ def main():
     a = p.parse_args(); ds = a.dataset
     interval = 5 if ds == 'losloop' else 15
     runs, by = collect(ds)
+    if not runs:
+        print(f'No completed runs for {ds}.')
+        return
     all_runs_table(runs, ds)
     for name in ENSEMBLE_OF:
         ens = ensemble(by, name, ds, interval)
@@ -215,19 +217,23 @@ def main():
     md = []
     for view in views:
         df = table_main(by, interval, ds, view)
+        if df.empty:
+            continue
         df.to_csv(TAB / f'main_results_{ds}{"_masked" if view == "masked" else ""}.csv')
         md.append(f'### {ds} — kết quả test ({view})\n\n' + df_to_markdown(df))
         print(df.to_string())
         plot_horizon(by, interval, ds, view,
                      ['naive', 'linear', 'gcn', 'gru', 'tgcn', 'tgcn_selfsep', 'gru_res_time', 'tgcn_res_time'])
-    pdf = table_paper(by, ds, interval)
-    print(pdf.round(4).to_string())
+    if md:
+        pdf = table_paper(by, ds, interval)
+        print(pdf.round(4).to_string())
     ob = oracle_bias(runs)
     if len(ob):
         ob.to_csv(TAB / f'oracle_bias_{ds}.csv', index=False)
         print(ob.round(4).to_string())
         print('mean optimistic bias %', ob['optimistic_bias_%'].mean().round(3))
-    (TAB / f'main_results_{ds}.md').write_text('\n\n'.join(md), encoding='utf-8')
+    if md:
+        (TAB / f'main_results_{ds}.md').write_text('\n\n'.join(md), encoding='utf-8')
 
 
 if __name__ == '__main__':
