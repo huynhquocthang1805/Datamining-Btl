@@ -194,7 +194,16 @@ def all_runs_table(runs, ds):
             row['RMSE_all_nonzero'] = m['masked_nonzero']['overall']['RMSE']
             row['MAE_all_nonzero'] = m['masked_nonzero']['overall']['MAE']
         rows.append(row)
-    pd.DataFrame(rows).sort_values(['group', 'config', 'seed']).to_csv(TAB / f'all_runs_{ds}.csv', index=False)
+    df = pd.DataFrame(rows)
+    # runs made on another machine (e.g. the GPU runs of LOCAL_RUN.md) are kept in
+    # reports/external/ and merged here, so that re-running this script never drops them
+    ext = ROOT / 'reports' / 'external' / f'modern_gpu_runs_{ds}.csv'
+    if ext.is_file():
+        e = pd.read_csv(ext, encoding='utf-8-sig')
+        have = set(zip(df['group'], df['config'], df['seed'])) if len(df) else set()
+        e = e[[(g, c, s_) not in have for g, c, s_ in zip(e['group'], e['config'], e['seed'])]]
+        df = pd.concat([df, e], ignore_index=True)
+    df.sort_values(['group', 'config', 'seed']).to_csv(TAB / f'all_runs_{ds}.csv', index=False)
 
 
 def main():
@@ -228,6 +237,9 @@ def main():
         pdf = table_paper(by, ds, interval)
         print(pdf.round(4).to_string())
     ob = oracle_bias(runs)
+    ext_ob = ROOT / 'reports' / 'external' / f'oracle_bias_modern_gpu_{ds}.csv'
+    if ext_ob.is_file():
+        ob = pd.concat([ob, pd.read_csv(ext_ob)], ignore_index=True).drop_duplicates(['config', 'seed'], keep='first')
     if len(ob):
         ob.to_csv(TAB / f'oracle_bias_{ds}.csv', index=False)
         print(ob.round(4).to_string())
